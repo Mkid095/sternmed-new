@@ -23,13 +23,13 @@ export default function MainLayout() {
   return (
     <div className="min-h-screen flex flex-col font-sans text-slate-900 bg-slate-50 pb-16 md:pb-0">
       {/* Information Header - Hidden on small mobile, simplified on tablet */}
-      <div className="hidden sm:block bg-slate-900 text-white text-xs py-2 px-4 md:px-8">
+      <div className="hidden sm:block bg-primary-600 text-white text-xs py-2 px-4 md:px-8">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4 md:gap-6">
             <span className="flex items-center gap-1.5"><Phone size={12} /> {settings?.phoneNumber || '+254 700 000 000'}</span>
             <span className="flex items-center gap-1.5"><Mail size={12} /> {settings?.email || 'info@sternmed.afrika'}</span>
           </div>
-          <span className="hidden lg:inline text-slate-300">Leading Supplier of Medical Consumables & Equipment</span>
+          <span className="hidden lg:inline text-white/90">Leading Supplier of Medical Consumables & Equipment</span>
         </div>
       </div>
 
@@ -75,8 +75,8 @@ export default function MainLayout() {
         <Outlet />
       </main>
 
-      {/* Footer */}
-      <footer className="bg-slate-900 text-slate-300 py-12">
+      {/* Footer - White theme with primary accents */}
+      <footer className="bg-white text-slate-700 py-12 border-t border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
             <div className="flex items-center gap-2 mb-4">
@@ -87,20 +87,20 @@ export default function MainLayout() {
                 referrerPolicy="no-referrer"
               />
             </div>
-            <p className="text-sm">{settings?.aboutText || 'Your trusted partner in medical consumables and equipment across Africa.'}</p>
+            <p className="text-sm text-slate-600">{settings?.aboutText || 'Your trusted partner in medical consumables and equipment across Africa.'}</p>
           </div>
           <div>
-            <h4 className="text-white font-semibold mb-4">Quick Links</h4>
+            <h4 className="text-primary-600 font-semibold mb-4">Quick Links</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link to="/shop" className="hover:text-white transition-colors">Shop</Link></li>
+              <li><Link to="/shop" className="hover:text-primary-600 transition-colors">Shop</Link></li>
             </ul>
           </div>
           <div>
-            <h4 className="text-white font-semibold mb-4">Categories</h4>
+            <h4 className="text-primary-600 font-semibold mb-4">Categories</h4>
             <ul className="space-y-2 text-sm">
               {categories.map((category) => (
                 <li key={category.id}>
-                  <Link to={`/shop?category=${category.id}`} className="hover:text-white transition-colors">
+                  <Link to={`/shop?category=${category.id}`} className="hover:text-primary-600 transition-colors">
                     {category.name}
                   </Link>
                 </li>
@@ -108,23 +108,23 @@ export default function MainLayout() {
             </ul>
           </div>
           <div>
-            <h4 className="text-white font-semibold mb-4">Contact Us</h4>
+            <h4 className="text-primary-600 font-semibold mb-4">Contact Us</h4>
             <ul className="space-y-2 text-sm">
-              <li>{settings?.address || 'Nairobi, Kenya'}</li>
+              <li className="text-slate-600">{settings?.address || 'Nairobi, Kenya'}</li>
               <li>{settings?.email || 'info@sternmed.afrika'}</li>
               <li>{settings?.phoneNumber || '+254 700 000 000'}</li>
             </ul>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pt-8 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pt-8 border-t border-slate-200">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm">
-            <p className="text-slate-400">
+            <p className="text-slate-500">
               &copy; {new Date().getFullYear()} Sternmed Afrika Ltd. All rights reserved.
             </p>
-            <div className="flex flex-wrap justify-center md:justify-end gap-4 text-slate-400">
-              <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link>
-              <Link to="/terms" className="hover:text-white transition-colors">Terms & Conditions</Link>
-              <Link to="/login" className="hover:text-white transition-colors">Admin Login</Link>
+            <div className="flex flex-wrap justify-center md:justify-end gap-4 text-slate-600">
+              <Link to="/privacy-policy" className="hover:text-primary-600 transition-colors">Privacy Policy</Link>
+              <Link to="/terms" className="hover:text-primary-600 transition-colors">Terms & Conditions</Link>
+              <Link to="/login" className="hover:text-primary-600 transition-colors">Admin Login</Link>
             </div>
           </div>
         </div>
