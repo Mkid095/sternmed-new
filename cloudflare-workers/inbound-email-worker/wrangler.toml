@@ -1,0 +1,14 @@
+name = "inbound-email-worker"
+main = "index.ts"
+compatibility_date = "2024-01-01"
+account_id = "8e66d3ac1829ab41a49d449659080d14"
+workers_dev = true
+
+# Environment variables are set via secrets (not in wrangler.toml for security)
+# Run: npx wrangler secret list
+
+[env.production]
+name = "inbound-email-worker-prod"
+
+[env.staging]
+name = "inbound-email-worker-staging"
