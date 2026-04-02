@@ -19,7 +19,7 @@ import { Button } from '../../shared/ui';
 import { useSettingsManager } from './hooks';
 import { api } from '../../../services/api';
 import { setDevelopmentMode as setDevMode, isDevelopmentMode as checkDevMode } from '../../../services/supabase/settings.service';
-import { Category } from '../../../types';
+import { Category, SiteSettings } from '../../../types';
 import { useToastSuccess, useToastError } from '../../shared/ui';
 
 /**
@@ -40,6 +40,7 @@ export default function AdminSettings() {
 
   const {
     settings,
+    setSettings,
     loading,
     saving,
     activeTab,
@@ -116,6 +117,7 @@ export default function AdminSettings() {
         setIsDevelopmentMode={setDevModeEnabled}
         togglingMode={togglingMode}
         setTogglingMode={setTogglingMode}
+        setSettings={setSettings}
       />
     </div>
   );
@@ -233,6 +235,7 @@ interface SettingsFormProps {
   setIsDevelopmentMode: (value: boolean) => void;
   togglingMode: boolean;
   setTogglingMode: (value: boolean) => void;
+  setSettings: React.Dispatch<React.SetStateAction<Partial<SiteSettings>>>;
 }
 
 function SettingsForm({
@@ -248,6 +251,7 @@ function SettingsForm({
   setIsDevelopmentMode,
   togglingMode,
   setTogglingMode,
+  setSettings,
 }: SettingsFormProps) {
   const showSuccess = useToastSuccess();
   const showError = useToastError();
@@ -285,6 +289,7 @@ function SettingsForm({
             draggedCategory={draggedCategory}
             setDraggedCategory={setDraggedCategory}
             onChange={onChange}
+            setSettings={setSettings}
           />
         ) : (
           <LegalSettings settings={settings} onChange={onChange} />
@@ -544,6 +549,7 @@ interface HomePageSettingsProps {
   draggedCategory: string | null;
   setDraggedCategory: (id: string | null) => void;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  setSettings: React.Dispatch<React.SetStateAction<Partial<SiteSettings>>>;
 }
 
 function HomePageSettings({
@@ -552,7 +558,27 @@ function HomePageSettings({
   draggedCategory,
   setDraggedCategory,
   onChange,
+  setSettings,
 }: HomePageSettingsProps) {
+    // Compute ordered categories based on prominentCategories order
+    const getOrderedCategories = (): Category[] => {
+      if (!settings.prominentCategories || settings.prominentCategories.length === 0) {
+        // Default: alphabetical by name
+        return [...categories].sort((a, b) => a.name.localeCompare(b.name));
+      }
+      const categoryMap = new Map(categories.map(c => [c.id, c]));
+      const ordered: Category[] = [];
+      for (const id of settings.prominentCategories) {
+        const cat = categoryMap.get(id);
+        if (cat) {
+          ordered.push(cat);
+          categoryMap.delete(id);
+        }
+      }
+      ordered.push(...categoryMap.values());
+      return ordered;
+    };
+    const sortedCategories = getOrderedCategories();
   const handleToggleFeatured = () => {
     const event = {
       target: {
@@ -585,7 +611,33 @@ function HomePageSettings({
 
   const handleDrop = (e: React.DragEvent, targetId: string) => {
     e.preventDefault();
-    // This would update the order - for now just a visual indicator
+    const draggedId = draggedCategory;
+    if (!draggedId) return;
+
+    // Get current order: either from prominentCategories or from current sorted list
+    const currentOrder = settings.prominentCategories && settings.prominentCategories.length > 0
+      ? settings.prominentCategories
+      : sortedCategories.map(c => c.id);
+
+    const draggedIndex = currentOrder.indexOf(draggedId);
+    const targetIndex = currentOrder.indexOf(targetId);
+
+    if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) {
+      setDraggedCategory(null);
+      return;
+    }
+
+    // Reorder: remove from old position, insert at target position
+    const newOrder = [...currentOrder];
+    newOrder.splice(draggedIndex, 1);
+    newOrder.splice(targetIndex, 0, draggedId);
+
+    // Update settings state
+    setSettings(prev => ({
+      ...prev,
+      prominentCategories: newOrder,
+    }));
+
     setDraggedCategory(null);
   };
 
@@ -605,12 +657,15 @@ function HomePageSettings({
         <button
           type="button"
           onClick={handleToggleFeatured}
-          className={`relative w-14 h-8 rounded-full transition-colors ${
-            settings.featuredSectionEnabled !== false ? 'bg-blue-600' : 'bg-slate-300'
-          }`}
+          className={`
+            relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
+            ${settings.featuredSectionEnabled !== false ? 'bg-primary-600' : 'bg-slate-300'}
+          `}
+          aria-checked={settings.featuredSectionEnabled !== false}
+          role="switch"
         >
           <span
-            className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform ${
+            className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
               settings.featuredSectionEnabled !== false ? 'translate-x-7' : 'translate-x-1'
             }`}
           />
@@ -647,15 +702,17 @@ function HomePageSettings({
           Drag to reorder categories shown on the home page
         </p>
         <div className="space-y-2">
-          {categories.map((category, index) => (
+          {sortedCategories.map((category, index) => (
             <div
               key={category.id}
               draggable
               onDragStart={(e) => handleDragStart(e, category.id)}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, category.id)}
-              className={`flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-lg cursor-move transition-colors ${
-                draggedCategory === category.id ? 'opacity-50' : 'hover:bg-slate-50'
+              className={`flex items-center gap-3 p-3 bg-white border-2 rounded-lg cursor-move transition-all ${
+                draggedCategory === category.id
+                  ? 'opacity-50 border-primary-300'
+                  : 'border-slate-200 hover:bg-slate-50 hover:border-primary-200'
               }`}
             >
               <div className="cursor-move text-slate-400">
@@ -663,8 +720,8 @@ function HomePageSettings({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
                 </svg>
               </div>
-              <span className="flex-1 text-sm text-slate-700">{category.name}</span>
-              <span className="text-xs text-slate-400">#{index + 1}</span>
+              <span className="flex-1 text-sm font-medium text-slate-700">{category.name}</span>
+              <span className="text-xs font-semibold text-primary-600">#{index + 1}</span>
             </div>
           ))}
           {categories.length === 0 && (
