@@ -268,37 +268,39 @@ function SettingsForm({
   };
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden p-4 sm:p-6">
-      {activeTab === 'site-status' ? (
-        <SiteStatusSettings
-          isDevelopmentMode={isDevelopmentMode}
-          onToggle={handleToggleDevMode}
-          togglingMode={togglingMode}
-        />
-      ) : activeTab === 'general' ? (
-        <GeneralSettings settings={settings} onChange={onChange} />
-      ) : activeTab === 'homepage' ? (
-        <HomePageSettings
-          settings={settings}
-          categories={categories}
-          draggedCategory={draggedCategory}
-          setDraggedCategory={setDraggedCategory}
-          onChange={onChange}
-        />
-      ) : (
-        <LegalSettings settings={settings} onChange={onChange} />
-      )}
+    <form onSubmit={onSave}>
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden p-4 sm:p-6">
+        {activeTab === 'site-status' ? (
+          <SiteStatusSettings
+            isDevelopmentMode={isDevelopmentMode}
+            onToggle={handleToggleDevMode}
+            togglingMode={togglingMode}
+          />
+        ) : activeTab === 'general' ? (
+          <GeneralSettings settings={settings} onChange={onChange} />
+        ) : activeTab === 'homepage' ? (
+          <HomePageSettings
+            settings={settings}
+            categories={categories}
+            draggedCategory={draggedCategory}
+            setDraggedCategory={setDraggedCategory}
+            onChange={onChange}
+          />
+        ) : (
+          <LegalSettings settings={settings} onChange={onChange} />
+        )}
 
-      {/* Save Button - Hidden on site-status tab since it has its own controls */}
-      {activeTab !== 'site-status' && (
-        <div className="pt-4 border-t border-slate-200 flex justify-end">
-          <Button type="submit" loading={saving} size="sm">
-            <Save size={16} />
-            {saving ? 'Saving...' : 'Save Settings'}
-          </Button>
-        </div>
-      )}
-    </div>
+        {/* Save Button - Hidden on site-status tab since it has its own controls */}
+        {activeTab !== 'site-status' && (
+          <div className="pt-4 border-t border-slate-200 flex justify-end">
+            <Button type="submit" loading={saving} size="sm">
+              <Save size={16} />
+              {saving ? 'Saving...' : 'Save Settings'}
+            </Button>
+          </div>
+        )}
+      </div>
+    </form>
   );
 }
 
