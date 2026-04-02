@@ -176,7 +176,7 @@ export interface Category {
   updatedAt?: string;
 }
 
-export type ProductStatus = 'active' | 'draft' | 'coming_soon' | 'archived';
+export type ProductStatus = 'active' | 'draft' | 'coming_soon' | 'archived' | 'out_of_stock';
 
 export interface Product {
   id: string;

@@ -29,7 +29,7 @@ export default function Shop() {
       try {
         const [prods, cats] = await Promise.all([api.getProducts(), api.getCategories()]);
         // Filter out draft and archived products from shop view
-        const visibleProducts = prods.filter((p) => p.status !== 'draft' && p.status !== 'archived');
+        const visibleProducts = prods.filter((p) => p.status !== 'draft' && p.status !== 'archived' && p.status !== 'out_of_stock');
         setProducts(visibleProducts);
         setCategories(cats);
       } catch (error) {

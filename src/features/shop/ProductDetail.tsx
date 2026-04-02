@@ -8,9 +8,10 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ShoppingBag, Package, Truck, Shield } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ShoppingBag, Package, Truck, Shield, MessageCircle } from 'lucide-react';
 import { api } from '../../services/api';
-import { Product } from '../../types';
+import { Product, SiteSettings } from '../../types';
+import { generateWhatsAppLink } from '../../constants';
 import { useCartStore } from '../../store/cartStore';
 import { useToastSuccess, useToastError } from '../shared/ui';
 
@@ -23,6 +24,7 @@ export default function ProductDetail() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
+  const [settings, setSettings] = useState<SiteSettings | null>(null);
 
   const addItem = useCartStore((state) => state.addItem);
   const showSuccess = useToastSuccess();
@@ -34,8 +36,8 @@ export default function ProductDetail() {
         const [productsData] = await Promise.all([
           api.getProducts(),
         ]);
-        // Filter out draft and archived products
-        const visibleProducts = productsData.filter((p) => p.status !== 'draft' && p.status !== 'archived');
+        // Filter out draft, archived, and out-of-stock products
+        const visibleProducts = productsData.filter((p) => p.status !== 'draft' && p.status !== 'archived' && p.status !== 'out_of_stock');
         setProducts(visibleProducts);
 
         const foundProduct = visibleProducts.find((p) => p.id === id);
@@ -52,6 +54,11 @@ export default function ProductDetail() {
     };
     fetchData();
   }, [id, navigate]);
+
+  // Fetch site settings for WhatsApp contact
+  useEffect(() => {
+    api.getSettings().then(setSettings).catch(console.error);
+  }, []);
 
   // Get all images for this product (main image + gallery if available)
   const productImages = product?.images?.length
@@ -152,9 +159,23 @@ export default function ProductDetail() {
         <div className="flex flex-col">
           <h1 className="text-2xl font-semibold text-slate-900 mb-2">{product.name}</h1>
 
-          <p className="text-2xl font-bold text-slate-900 mb-4">
-            Ksh {product.price.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-          </p>
+          {product.status === 'coming_soon' ? (
+            <button
+              onClick={() => {
+                const phone = settings?.phoneNumber || '254700000000';
+                const message = `Hi, I'd like to enquire about: ${product.name}`;
+                window.open(generateWhatsAppLink(phone, message), '_blank');
+              }}
+              className="mb-4 py-3 px-6 bg-primary-600 text-white rounded font-medium hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <MessageCircle size={20} />
+              Enquire
+            </button>
+          ) : (
+            <p className="text-2xl font-bold text-slate-900 mb-4">
+              Ksh {product.price.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            </p>
+          )}
 
           {/* Status Badge */}
           <div className="mb-4">
@@ -228,10 +249,15 @@ export default function ProductDetail() {
           {product.status === 'coming_soon' && (
             <div className="mt-auto">
               <button
-                disabled
-                className="w-full py-3 bg-blue-100 text-blue-700 rounded font-medium cursor-not-allowed"
+                onClick={() => {
+                  const phone = settings?.phoneNumber || '254700000000';
+                  const message = `Hi, I'd like to enquire about: ${product.name}`;
+                  window.open(generateWhatsAppLink(phone, message), '_blank');
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-primary-600 text-white rounded font-medium hover:bg-primary-700 transition-colors"
               >
-                Coming Soon
+                <MessageCircle size={18} />
+                Enquire
               </button>
             </div>
           )}
