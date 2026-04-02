@@ -52,7 +52,8 @@ export default function Home() {
     return products.filter((p) =>
       p.isFeatured &&
       p.status !== 'draft' &&
-      p.status !== 'archived'
+      p.status !== 'archived' &&
+      p.status !== 'out_of_stock'
     ).slice(0, 8);
   }, [products]);
 

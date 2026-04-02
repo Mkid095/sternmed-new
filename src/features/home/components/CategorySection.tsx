@@ -29,9 +29,9 @@ interface CategorySectionProps {
 export function CategorySection({ category, products, onAddToCart }: CategorySectionProps) {
   const navigate = useNavigate();
 
-  // Show products for this category that are not draft or archived
+  // Show products for this category that are not draft, archived, or out-of-stock
   const categoryProducts = products.filter(
-    (p) => p.categoryId === category.id && p.status !== 'draft' && p.status !== 'archived'
+    (p) => p.categoryId === category.id && p.status !== 'draft' && p.status !== 'archived' && p.status !== 'out_of_stock'
   );
 
   if (categoryProducts.length === 0) return null;

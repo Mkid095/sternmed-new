@@ -34,8 +34,8 @@ export default function ProductDetail() {
         const [productsData] = await Promise.all([
           api.getProducts(),
         ]);
-        // Filter out draft and archived products
-        const visibleProducts = productsData.filter((p) => p.status !== 'draft' && p.status !== 'archived');
+        // Filter out draft, archived, and out-of-stock products
+        const visibleProducts = productsData.filter((p) => p.status !== 'draft' && p.status !== 'archived' && p.status !== 'out_of_stock');
         setProducts(visibleProducts);
 
         const foundProduct = visibleProducts.find((p) => p.id === id);
