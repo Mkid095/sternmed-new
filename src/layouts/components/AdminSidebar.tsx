@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { type ComponentType, ReactNode, useEffect } from 'react';
 import { LayoutDashboard, Package, Mail, Users, Settings, Image as ImageIcon, LayoutList, LayoutTemplate, ShoppingCart, X, AlertCircle, FileText } from 'lucide-react';
 import { User } from '../../types';
@@ -30,6 +30,8 @@ interface AdminSidebarProps {
 }
 
 export function AdminSidebar({ user, children, isOpen = true, onClose }: AdminSidebarProps) {
+  const location = useLocation();
+
   // Close sidebar on route change (mobile)
   useEffect(() => {
     if (isOpen && window.innerWidth < 1024) {
@@ -44,12 +46,12 @@ export function AdminSidebar({ user, children, isOpen = true, onClose }: AdminSi
     <aside
       className={`
         fixed lg:static inset-y-0 left-0 z-50
-        w-64 bg-primary-700 text-white flex flex-col
+        w-64 bg-white border-r border-primary-200 flex flex-col
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}
     >
-      <div className="h-16 flex items-center justify-between px-4 border-b border-primary-900">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-primary-200">
         <Link to="/admin" className="flex items-center">
           <img
             src="https://res.cloudinary.com/dxb22swfg/image/upload/v1765747561/Asset_4_v5ksi6.png"
@@ -60,7 +62,7 @@ export function AdminSidebar({ user, children, isOpen = true, onClose }: AdminSi
         </Link>
         <button
           onClick={onClose}
-          className="lg:hidden p-1 text-primary-200 hover:text-white rounded-md hover:bg-primary-800"
+          className="lg:hidden p-1 text-primary-600 hover:text-primary-800 rounded-md hover:bg-primary-50"
           aria-label="Close sidebar"
         >
           <X size={20} />
@@ -73,11 +75,17 @@ export function AdminSidebar({ user, children, isOpen = true, onClose }: AdminSi
             .filter((item) => !item.adminOnly || user.role === 'admin')
             .map((item) => {
               const Icon = item.icon;
+              const isActive = location.pathname === item.to;
               return (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-primary-800 hover:text-white transition-colors text-sm font-medium"
+                  className={`
+                    flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-sm font-medium
+                    ${isActive
+                      ? 'bg-primary-600 text-white'
+                      : 'text-primary-600 hover:bg-primary-50'}
+                  `}
                 >
                   <Icon size={18} />
                   <span>{item.label}</span>
