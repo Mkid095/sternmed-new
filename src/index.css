@@ -2,22 +2,22 @@
 
 /* ============================================
    STERNMED AFRIKA BRAND COLORS
-   Primary: #17487a
+   Primary: #2596be (Brightened blue)
    ============================================ */
 
 :root {
-  /* Primary Colors */
-  --color-primary: #17487a;
-  --color-primary-50: #e8f1f9;
-  --color-primary-100: #c5dff4;
-  --color-primary-200: #a3c9ef;
-  --color-primary-300: #80b2e9;
-  --color-primary-400: #5e9ce4;
-  --color-primary-500: #3c86df;
-  --color-primary-600: #17487a;
-  --color-primary-700: #123a62;
-  --color-primary-800: #0d2c4a;
-  --color-primary-900: #081e32;
+  /* Primary Colors - Rebranded to brighter blue */
+  --color-primary: #2596be;
+  --color-primary-50: #e6f7ff;
+  --color-primary-100: #ccefff;
+  --color-primary-200: #99ddff;
+  --color-primary-300: #66bbff;
+  --color-primary-400: #3399ff;
+  --color-primary-500: #0077e6;
+  --color-primary-600: #0057b3;
+  --color-primary-700: #004290;
+  --color-primary-800: #002c6e;
+  --color-primary-900: #00194d;
 
   /* Complementary Accent (Warm Orange/Gold) */
   --color-accent: #f59e0b;
@@ -140,7 +140,7 @@
    COMPONENT STYLES
    ============================================ */
 
-/* Primary Button */
+/* Primary Button - Rebranded */
 .btn-primary {
   background-color: var(--color-primary-600);
   color: white;

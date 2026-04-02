@@ -82,9 +82,9 @@ export interface UseDashboardReturn {
   refresh: () => Promise<void>;
 }
 
-// Chart colors matching brand theme
+// Chart colors matching brand theme (rebranded primary)
 const CHART_COLORS = [
-  '#17487a', // primary
+  '#2596be', // primary (rebranded)
   '#f59e0b', // accent
   '#6b9080', // secondary
   '#8b5cf6', // purple
