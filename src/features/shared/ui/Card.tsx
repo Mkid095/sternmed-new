@@ -1,7 +1,9 @@
-import React, { ReactNode } from 'react';
-import { ShoppingBag } from 'lucide-react';
+import React, { ReactNode, useEffect, useState } from 'react';
+import { ShoppingBag, MessageCircle } from 'lucide-react';
 import { clsx } from 'clsx';
-import { ProductStatus } from '../../../types';
+import { ProductStatus, SiteSettings } from '../../../types';
+import { api } from '../../../services/api';
+import { generateWhatsAppLink } from '../../../constants';
 
 interface CardProps {
   children: ReactNode;
@@ -88,6 +90,12 @@ export function ProductCard({
     }
   };
 
+  // Fetch settings for WhatsApp contact
+  const [settings, setSettings] = useState<SiteSettings | null>(null);
+  useEffect(() => {
+    api.getSettings().then(setSettings).catch(console.error);
+  }, []);
+
   return (
     <div
       onClick={handleCardClick}
@@ -111,18 +119,6 @@ export function ProductCard({
         {product.status === 'coming_soon' && (
           <div className="absolute top-2 right-2 bg-blue-500 text-white px-2 py-0.5 rounded text-xs font-semibold shadow-sm">
             Coming Soon
-          </div>
-        )}
-        {/* Out of Stock Overlay */}
-        {product.stock === 0 && product.status !== 'coming_soon' && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <span className="bg-white text-slate-900 px-3 py-1 rounded text-sm font-semibold">Out of Stock</span>
-          </div>
-        )}
-        {/* Coming Soon Overlay */}
-        {product.status === 'coming_soon' && (
-          <div className="absolute inset-0 bg-blue-500/30 flex items-center justify-center">
-            <span className="bg-white text-blue-900 px-3 py-1 rounded text-sm font-semibold">Coming Soon</span>
           </div>
         )}
       </div>
@@ -151,21 +147,36 @@ export function ProductCard({
           </p>
         )}
 
-        {/* Price and Add to Cart */}
-        <div className="flex items-center justify-between pt-1 mt-auto gap-2">
-          <span className="text-sm font-bold text-slate-900">
-            Ksh {product.price.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-          </span>
-          {onAddToCart && product.stock > 0 && product.status === 'active' && (
-            <button
-              onClick={handleAddToCart}
-              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-medium transition-colors"
-              aria-label="Add to cart"
-            >
-              Add
-            </button>
-          )}
-        </div>
+        {/* Price or Enquire Button */}
+        {product.status === 'coming_soon' ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              const phone = settings?.phoneNumber || '254700000000';
+              const message = `Hi, I'd like to enquire about: ${product.name}`;
+              window.open(generateWhatsAppLink(phone, message), '_blank');
+            }}
+            className="w-full py-2 flex items-center justify-center gap-2 bg-primary-600 text-white rounded font-medium hover:bg-primary-700 transition-colors"
+          >
+            <MessageCircle size={16} />
+            Enquire
+          </button>
+        ) : (
+          <div className="flex items-center justify-between pt-1 mt-auto gap-2">
+            <span className="text-sm font-bold text-slate-900">
+              Ksh {product.price.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            </span>
+            {onAddToCart && product.stock > 0 && product.status === 'active' && (
+              <button
+                onClick={handleAddToCart}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-medium transition-colors"
+                aria-label="Add to cart"
+              >
+                Add
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
