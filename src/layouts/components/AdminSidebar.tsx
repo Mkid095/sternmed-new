@@ -44,12 +44,12 @@ export function AdminSidebar({ user, children, isOpen = true, onClose }: AdminSi
     <aside
       className={`
         fixed lg:static inset-y-0 left-0 z-50
-        w-64 bg-slate-900 text-slate-300 flex flex-col
+        w-64 bg-primary-700 text-white flex flex-col
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}
     >
-      <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-primary-900">
         <Link to="/admin" className="flex items-center">
           <img
             src="https://res.cloudinary.com/dxb22swfg/image/upload/v1765747561/Asset_4_v5ksi6.png"
@@ -60,7 +60,7 @@ export function AdminSidebar({ user, children, isOpen = true, onClose }: AdminSi
         </Link>
         <button
           onClick={onClose}
-          className="lg:hidden p-1 text-slate-400 hover:text-white rounded-md hover:bg-slate-800"
+          className="lg:hidden p-1 text-primary-200 hover:text-white rounded-md hover:bg-primary-800"
           aria-label="Close sidebar"
         >
           <X size={20} />
@@ -77,7 +77,7 @@ export function AdminSidebar({ user, children, isOpen = true, onClose }: AdminSi
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-slate-800 hover:text-white transition-colors text-sm font-medium"
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-primary-800 hover:text-white transition-colors text-sm font-medium"
                 >
                   <Icon size={18} />
                   <span>{item.label}</span>
@@ -87,7 +87,7 @@ export function AdminSidebar({ user, children, isOpen = true, onClose }: AdminSi
         </nav>
       </div>
 
-      {children && <div className="border-t border-slate-800">{children}</div>}
+      {children && <div className="border-t border-primary-900">{children}</div>}
     </aside>
   );
 }
