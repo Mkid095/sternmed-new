@@ -28,17 +28,17 @@ export function EmailDetail({ email, filter, onReply, onForward, onDelete }: Ema
   // Fetch thread if this email is part of a thread
   useEffect(() => {
     const fetchThread = async () => {
-      if (email.type === 'inbox' && email.thread_id && !showThread) {
+      if (email.type === 'inbox' && email.threadId && !showThread) {
         // Only load thread when expanded
         return;
       }
 
-      if (email.type === 'inbox' && email.thread_id && showThread) {
+      if (email.type === 'inbox' && email.threadId && showThread) {
         setLoadingThread(true);
         try {
           // Import here to avoid circular dependency
           const { emailInboundService } = await import('../../../../services/supabase/email-inbound.service');
-          const thread = await emailInboundService.getThread(email.thread_id);
+          const thread = await emailInboundService.getThread(email.threadId);
           // Convert to UnifiedEmail[]
           const unifiedThread: UnifiedEmail[] = thread.map((e) => ({
             ...e,
@@ -54,13 +54,14 @@ export function EmailDetail({ email, filter, onReply, onForward, onDelete }: Ema
     };
 
     fetchThread();
-  }, [email.thread_id, showThread, email.id]);
+  }, [email.threadId, showThread, email.id]);
 
   const getDisplayContact = () => {
     if (filter === 'inbox') {
-      return email.sender_name ? `${email.sender_name} <${email.sender_email}>` : email.sender_email;
+      return email.senderName ? `${email.senderName} <${email.senderEmail}>` : email.senderEmail;
     }
-    return email.recipient_email;
+    // For sent/draft emails, recipientEmail is guaranteed via type narrowing
+    return (email as { recipientEmail?: string }).recipientEmail ?? 'Unknown';
   };
 
   const formatDate = (dateStr: string) => {
@@ -69,9 +70,9 @@ export function EmailDetail({ email, filter, onReply, onForward, onDelete }: Ema
 
   const renderBody = () => {
     if (email.type === 'inbox') {
-      return email.body_html || email.body_text || '';
+      return email.bodyHtml || email.bodyText || '';
     }
-    return email.body_html || email.body_text || '';
+    return email.bodyHtml || email.bodyText || '';
   };
 
   const renderAttachments = () => {
@@ -135,7 +136,7 @@ export function EmailDetail({ email, filter, onReply, onForward, onDelete }: Ema
     );
   };
 
-  const hasThread = email.type === 'inbox' && !!email.thread_id;
+  const hasThread = email.type === 'inbox' && !!email.threadId;
   const threadCount = threadEmails.length;
 
   return (
@@ -183,9 +184,9 @@ export function EmailDetail({ email, filter, onReply, onForward, onDelete }: Ema
             </div>
             <div className="text-xs text-slate-500">
               {filter === 'inbox' ? 'To: ' : 'From: '}
-              {filter === 'inbox' ? 'you' : email.recipient_email}
+              {email.type === 'inbox' ? 'you' : (email as { recipientEmail?: string }).recipientEmail ?? 'Unknown'}
               {' · '}
-              {formatDate(email.type === 'inbox' ? email.received_at : email.created_at)}
+              {formatDate(email.type === 'inbox' ? email.receivedAt : email.createdAt)}
             </div>
           </div>
         </div>
@@ -206,7 +207,7 @@ export function EmailDetail({ email, filter, onReply, onForward, onDelete }: Ema
       <div className="flex-1 overflow-y-auto p-6">
         {/* Current email body */}
         <div className="mb-8">
-          {email.body_html ? (
+          {email.bodyHtml ? (
             <div
               className="prose prose-sm max-w-none text-slate-700"
               dangerouslySetInnerHTML={{ __html: renderBody() }}

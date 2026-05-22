@@ -212,15 +212,10 @@ export function useOrdersManager(): UseOrdersManagerReturn {
   }, []);
 
   /**
-   * Fetch and calculate order statistics
+   * Calculate and set order statistics from currently fetched orders
    */
-  const fetchStats = useCallback(async () => {
-    try {
-      const data = await api.getOrders();
-      setStats(calculateOrderStats(data));
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
-    }
+  const computeStats = useCallback((currentOrders: Order[]) => {
+    setStats(calculateOrderStats(currentOrders));
   }, []);
 
   /**
@@ -228,18 +223,23 @@ export function useOrdersManager(): UseOrdersManagerReturn {
    */
   useEffect(() => {
     fetchOrders();
-    fetchStats();
-  }, [fetchOrders, fetchStats]);
+  }, [fetchOrders]);
+
+  // Compute stats whenever orders change
+  useEffect(() => {
+    if (orders.length > 0) {
+      computeStats(orders);
+    }
+  }, [orders, computeStats]);
 
   // ============ Handlers ============
 
   /**
-   * Refresh orders and stats
+   * Refresh orders and recompute stats
    */
   const refreshOrders = useCallback(async () => {
     await fetchOrders();
-    await fetchStats();
-  }, [fetchOrders, fetchStats]);
+  }, [fetchOrders]);
 
   /**
    * Handle order status update

@@ -6,6 +6,64 @@ export interface UploadResult {
 }
 
 export const storageService = {
+  // Validate file before upload (any file type, up to 10MB)
+  validateFile: (file: File, maxSizeMB: number = 10): { valid: boolean; error?: string } => {
+    // Check file exists
+    if (!file) {
+      return { valid: false, error: 'No file selected' };
+    }
+
+    // Check file size
+    const maxSize = maxSizeMB * 1024 * 1024;
+    if (file.size > maxSize) {
+      return { valid: false, error: `File size too large. Maximum size is ${maxSizeMB}MB.` };
+    }
+
+    return { valid: true };
+  },
+
+  // Upload file to Cloudinary (any file type)
+  uploadFile: async (file: File, folder?: string): Promise<UploadResult> => {
+    // Detect resource type based on MIME type
+    const resourceType = file.type.startsWith('image/')
+      ? 'image'
+      : file.type.startsWith('video/')
+        ? 'video'
+        : 'raw';
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', cloudinaryConfig.uploadPreset);
+    formData.append('api_key', cloudinaryConfig.apiKey);
+
+    if (folder) {
+      formData.append('folder', folder);
+    }
+
+    const response = await fetch(getCloudinaryUploadUrl(resourceType), {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || 'Failed to upload file');
+    }
+
+    const data = await response.json();
+
+    return {
+      url: data.secure_url,
+      publicId: data.public_id,
+    };
+  },
+
+  // Upload multiple files
+  uploadFiles: async (files: File[], folder?: string): Promise<UploadResult[]> => {
+    const uploadPromises = Array.from(files).map((file) => storageService.uploadFile(file, folder));
+    return Promise.all(uploadPromises);
+  },
+
   // Validate image file before upload
   validateImage: (file: File): { valid: boolean; error?: string } => {
     // Check file exists
@@ -33,31 +91,7 @@ export const storageService = {
 
   // Upload image to Cloudinary
   uploadImage: async (file: File, folder?: string): Promise<UploadResult> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', cloudinaryConfig.uploadPreset);
-    formData.append('api_key', cloudinaryConfig.apiKey);
-
-    if (folder) {
-      formData.append('folder', folder);
-    }
-
-    const response = await fetch(getCloudinaryUploadUrl(), {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || 'Failed to upload image');
-    }
-
-    const data = await response.json();
-
-    return {
-      url: data.secure_url,
-      publicId: data.public_id,
-    };
+    return storageService.uploadFile(file, folder);
   },
 
   // Upload multiple images

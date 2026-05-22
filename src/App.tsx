@@ -29,6 +29,10 @@ import { AdminUsers } from './features/admin/users';
 import { AdminSettings } from './features/admin/settings';
 import AdminOrders from './features/admin/orders';
 
+// Guards
+import { AuthGuard, RoleGuard } from './guards';
+import { useAuthStore } from './store/authStore';
+
 // Initialize Firebase
 import './config/firebase';
 
@@ -103,9 +107,21 @@ export default function App() {
               <Route path="categories" element={<AdminCategories />} />
               <Route path="landing-config" element={<AdminLandingConfig />} />
               <Route path="banners" element={<AdminBanners />} />
-              <Route path="mails" element={<AdminMails />} />
-              <Route path="users" element={<AdminUsers />} />
-              <Route path="settings" element={<AdminSettings />} />
+              <Route path="mails" element={
+                <RoleGuard allowedRoles={['admin']}>
+                  <AdminMails />
+                </RoleGuard>
+              } />
+              <Route path="users" element={
+                <RoleGuard allowedRoles={['admin']}>
+                  <AdminUsers />
+                </RoleGuard>
+              } />
+              <Route path="settings" element={
+                <RoleGuard allowedRoles={['admin']}>
+                  <AdminSettings />
+                </RoleGuard>
+              } />
               <Route path="orders" element={<AdminOrders />} />
             </Route>
 

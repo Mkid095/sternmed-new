@@ -14,16 +14,16 @@
  */
 
 import { useState, useCallback } from 'react';
+import type { FormEvent, ChangeEvent } from 'react';
 import { Mail, RefreshCw, ArrowLeft, Search, Send, FileText } from 'lucide-react';
 import { ConfirmationModal, useConfirmationModal } from '../../shared/ui';
 import { EmailSidebar } from './components/EmailSidebar';
 import { EmailList } from './components/EmailList';
 import { EmailDetail, EmptyEmailDetail } from './components/EmailDetail';
 import { EmailCompose } from './components/EmailCompose';
-import { useEmailManager } from './hooks';
-import { UnifiedEmail } from './hooks';
-import { emailInboundService } from '../../services/supabase/email-inbound.service';
-import { emailOutboundService } from '../../services/supabase/email-outbound.service';
+import { useEmailManager, UnifiedEmail, ComposeForm } from './hooks';
+import { emailInboundService } from '../../../services/supabase/email-inbound.service';
+import { emailOutboundService } from '../../../services/supabase/email-outbound.service';
 
 /**
  * Admin Email Platform Component
@@ -99,10 +99,8 @@ export default function AdminEmails() {
         setSelectedEmail(null);
         setMobileView('list');
         await refresh();
-        showSuccess('Email deleted');
       } catch (error) {
         console.error('Failed to delete email:', error);
-        showError('Failed to delete email');
       }
     }
   });
@@ -126,7 +124,7 @@ export default function AdminEmails() {
   /**
    * Handle search input change with debounce
    */
-  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setSearchQuery(query);
 

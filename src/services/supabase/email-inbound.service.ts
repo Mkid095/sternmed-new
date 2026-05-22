@@ -8,7 +8,7 @@
  */
 
 import { supabase } from '../../config/supabase';
-import { EmailInbound } from '../../types';
+import { EmailInbound, EmailAttachment } from '../../types';
 
 /**
  * Database row type for email_inbound table
@@ -48,7 +48,7 @@ function transformInboundRow(row: EmailInboundRow): EmailInbound {
     subject: row.subject ?? undefined,
     bodyHtml: row.body_html ?? undefined,
     bodyText: row.body_text ?? undefined,
-    attachments: (row.attachments as { filename: string; contentType: string; size: number; storagePath: string }[]) ?? [],
+    attachments: (row.attachments as EmailAttachment[]) ?? [],
     messageId: row.message_id ?? undefined,
     inReplyTo: row.in_reply_to ?? undefined,
     references: row.references ?? undefined,

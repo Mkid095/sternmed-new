@@ -127,7 +127,23 @@ export interface EmailTemplate {
 }
 
 /**
- * Email rate limits per alias
+ * Email rate limits per alias (database row - snake_case)
+ */
+export interface EmailAliasLimitsRow {
+  id: string;
+  alias_id: string;
+  daily_limit: number;
+  monthly_limit: number;
+  sent_today: number;
+  sent_this_month: number;
+  last_reset_date: string;
+  reset_month_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Email rate limits per alias (application type - camelCase)
  */
 export interface EmailAliasLimits {
   id: string;

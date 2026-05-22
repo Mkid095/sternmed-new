@@ -10,6 +10,7 @@
 import React, { useState, FormEvent } from 'react';
 import { useNavigate, useLocation, Location } from 'react-router-dom';
 import { Lock } from 'lucide-react';
+import { useAuthStore } from '../../store/authStore';
 
 /**
  * Location state type for redirect after login
@@ -69,6 +70,10 @@ export default function AdminLogin() {
         setIsSubmitting(false);
         return;
       }
+
+      // Update auth store with user data before navigation
+      const { useAuthStore } = await import('../../store/authStore');
+      useAuthStore.getState().setUser(user);
 
       // Check if user has admin or staff role
       if (user.role !== 'admin' && user.role !== 'staff') {

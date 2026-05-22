@@ -1,9 +1,9 @@
 import React, { ReactNode } from 'react';
 import { User, Role } from '../types';
+import { useAuthStore } from '../store/authStore';
 
 interface RoleGuardProps {
   children: ReactNode;
-  user: User | null;
   allowedRoles?: Role[];
   requiredPermission?: string;
   fallback?: ReactNode;
@@ -11,10 +11,11 @@ interface RoleGuardProps {
 
 export default function RoleGuard({
   children,
-  user,
   allowedRoles,
   fallback = null,
 }: RoleGuardProps) {
+  // Get user from authStore instead of requiring it as a prop
+  const user = useAuthStore((state) => state.user);
   // If no user, don't render
   if (!user) {
     return <>{fallback}</>;

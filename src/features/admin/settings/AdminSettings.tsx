@@ -18,7 +18,7 @@ import { Input } from '../../shared/ui';
 import { Button } from '../../shared/ui';
 import { useSettingsManager } from './hooks';
 import { api } from '../../../services/api';
-import { setDevelopmentMode as setDevMode, isDevelopmentMode as checkDevMode } from '../../../services/supabase/settings.service';
+import { setDevelopmentMode as setDevMode, isDevelopmentMode as checkDevMode } from '../../../services/siteSettings.service';
 import { Category, SiteSettings } from '../../../types';
 import { useToastSuccess, useToastError } from '../../shared/ui';
 

@@ -1,35 +1,6 @@
 import { supabase } from '../../config/supabase';
 import { Order, OrderItem, OrderStatus } from '../../types';
-
-// Database row types
-interface OrderRow {
-  id: string;
-  user_id: string | null;
-  customer_name: string;
-  customer_email: string;
-  customer_phone: string | null;
-  shipping_address: string | null;
-  subtotal: number;
-  shipping_cost: number;
-  total: number;
-  status: string;
-  payment_method: string;
-  payment_status: string;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface OrderItemRow {
-  id: string;
-  order_id: string;
-  product_id: string | null;
-  product_name: string;
-  quantity: number;
-  unit_price: number;
-  total_price: number;
-  created_at: string;
-}
+import { OrderRow, OrderItemRow } from './orders/types';
 
 // Convert database row to app type
 const fromOrderRow = (row: OrderRow): Order => ({

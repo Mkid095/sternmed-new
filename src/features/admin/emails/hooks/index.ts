@@ -7,4 +7,12 @@
  */
 
 export { useEmailManager } from './useEmailManager';
-export type { ComposeForm, UseEmailManagerReturn, EmailFilter, MobileView } from './useEmailManager';
+export type {
+  ComposeForm,
+  ComposeAttachment,
+  UseEmailManagerReturn,
+  EmailFilter,
+  MobileView,
+  UnifiedEmail,
+} from './useEmailManager';
+export type { EmailAttachment } from '../../../../types';

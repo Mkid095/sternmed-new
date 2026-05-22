@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { User } from '../../../types';
 import { api } from '../../../services/api';
+import { useAuthStore } from '../../../store/authStore';
 import { ConfirmationModal, useConfirmationModal, useToastSuccess, useToastError } from '../../shared/ui';
 
 /**
@@ -56,6 +57,7 @@ export default function AdminUsers() {
   const showSuccess = useToastSuccess();
   const showError = useToastError();
   const confirmModal = useConfirmationModal();
+  const currentUser = useAuthStore((state) => state.user);
 
   const fetchData = async () => {
     try {
@@ -118,6 +120,12 @@ export default function AdminUsers() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
+    // Prevent self-role-change to avoid lockout
+    if (editingUser && currentUser && editingUser.id === currentUser.id && formData.role !== editingUser.role) {
+      showError('You cannot change your own role');
+      return;
+    }
 
     try {
       if (editingUser) {

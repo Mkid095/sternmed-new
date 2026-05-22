@@ -164,7 +164,7 @@ export const emailsService = {
           <p><strong>Password:</strong> ${password}</p>
         </div>
         <p>You can log in to the admin dashboard at:</p>
-        <p><a href="${Deno.env.get('APP_URL') || 'https://sternmed.afrika'}/admin/login" style="background: #1e40af; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Login to Admin Dashboard</a></p>
+        <p><a href="${import.meta.env.VITE_APP_URL || 'https://sternmed.afrika'}/admin/login" style="background: #1e40af; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Login to Admin Dashboard</a></p>
         <p><strong>Important:</strong> For security reasons, we recommend changing your password after your first login.</p>
         <p>If you have any questions or need assistance, please contact the system administrator.</p>
         <p>Best regards,<br>Sternmed Afrika Team</p>

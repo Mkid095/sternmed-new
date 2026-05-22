@@ -26,21 +26,19 @@ import { fromOrderRow, fromOrderItemRow, enrichOrderWithItems } from './transfor
  * console.log(orders.length); // Total orders
  */
 export async function getAllOrders(): Promise<Order[]> {
-  // Fetch all orders ordered by creation date
+  // Fetch all orders with their items in a single query using join
   const { data, error } = await supabase
     .from('orders')
-    .select('*')
+    .select('*, order_items(*)')
     .order('created_at', { ascending: false });
 
   if (error) throw error;
 
-  // Fetch items for each order and enrich
-  const orders = await Promise.all(
-    (data || []).map(async (order) => {
-      const items = await getOrderItems(order.id);
-      return { ...fromOrderRow(order), items };
-    })
-  );
+  // Transform the joined data - order_items comes as an array from the join
+  const orders = (data || []).map((row) => {
+    const items = (row.order_items || []).map(fromOrderItemRow);
+    return { ...fromOrderRow(row), items };
+  });
 
   return orders;
 }
@@ -62,10 +60,10 @@ export async function getAllOrders(): Promise<Order[]> {
  * }
  */
 export async function getOrderById(id: string): Promise<Order | null> {
-  // Fetch the order
+  // Fetch the order with items in a single query
   const { data, error } = await supabase
     .from('orders')
-    .select('*')
+    .select('*, order_items(*)')
     .eq('id', id)
     .single();
 
@@ -75,8 +73,8 @@ export async function getOrderById(id: string): Promise<Order | null> {
     throw error;
   }
 
-  // Fetch and attach items
-  const items = await getOrderItems(id);
+  // Transform the joined data
+  const items = (data.order_items || []).map(fromOrderItemRow);
   return { ...fromOrderRow(data), items };
 }
 
@@ -94,22 +92,20 @@ export async function getOrderById(id: string): Promise<Order | null> {
  * const userOrders = await getOrdersByUserId('user-123');
  */
 export async function getOrdersByUserId(userId: string): Promise<Order[]> {
-  // Fetch orders for the user
+  // Fetch orders for the user with items in a single query
   const { data, error } = await supabase
     .from('orders')
-    .select('*')
+    .select('*, order_items(*)')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
 
-  // Fetch items for each order
-  const orders = await Promise.all(
-    (data || []).map(async (order) => {
-      const items = await getOrderItems(order.id);
-      return { ...fromOrderRow(order), items };
-    })
-  );
+  // Transform the joined data
+  const orders = (data || []).map((row) => {
+    const items = (row.order_items || []).map(fromOrderItemRow);
+    return { ...fromOrderRow(row), items };
+  });
 
   return orders;
 }

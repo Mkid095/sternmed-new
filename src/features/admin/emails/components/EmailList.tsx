@@ -7,6 +7,7 @@ interface EmailListProps {
   onSelectEmail: (email: UnifiedEmail) => void;
   onLoadMore?: () => void;
   loading: boolean;
+  hasMore?: boolean;
 }
 
 /**
@@ -18,21 +19,21 @@ interface EmailListProps {
  * - Pagination/load more
  * - Empty state
  */
-export function EmailList({ emails, filter, selectedEmail, onSelectEmail, onLoadMore, loading }: EmailListProps) {
+export function EmailList({ emails, filter, selectedEmail, onSelectEmail, onLoadMore, loading, hasMore }: EmailListProps) {
   const getDisplaySender = (email: UnifiedEmail) => {
     if (email.type === 'inbox') {
-      return email.sender_email;
+      return email.senderEmail;
     }
-    return email.recipient_email;
+    return email.recipientEmail;
   };
 
   const getDisplayDate = (email: UnifiedEmail) => {
-    const date = email.type === 'inbox' ? email.received_at : email.created_at;
+    const date = email.type === 'inbox' ? email.receivedAt : email.createdAt;
     return date ? new Date(date).toLocaleDateString() : '';
   };
 
   const isUnread = (email: UnifiedEmail) => {
-    return email.type === 'inbox' && !email.is_read;
+    return email.type === 'inbox' && !email.isRead;
   };
 
   return (
@@ -91,7 +92,7 @@ export function EmailList({ emails, filter, selectedEmail, onSelectEmail, onLoad
 
                   {/* Preview snippet */}
                   <div className="text-xs text-slate-500 truncate line-clamp-2">
-                    {email.type === 'inbox' ? email.body_text || email.body_html?.replace(/<[^>]*>/g, '') : email.body_text || email.body_html?.replace(/<[^>]*>/g, '')}
+                    {email.type === 'inbox' ? email.bodyText || email.bodyHtml?.replace(/<[^>]*>/g, '') : email.bodyText || email.bodyHtml?.replace(/<[^>]*>/g, '')}
                   </div>
 
                   {/* Status indicator for sent/draft */}

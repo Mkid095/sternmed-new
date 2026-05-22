@@ -1,6 +1,6 @@
-import { FormEvent } from 'react';
+import type { FormEvent, ChangeEvent } from 'react';
 import { Send, X, Paperclip, Save } from 'lucide-react';
-import { ComposeForm } from '../hooks';
+import { ComposeForm, ComposeAttachment } from '../hooks';
 
 interface EmailComposeProps {
   composeForm: ComposeForm;
@@ -22,24 +22,21 @@ interface EmailComposeProps {
  * - Send and Save Draft buttons
  */
 export function EmailCompose({ composeForm, sending, onCancel, onSubmit, onSaveDraft, onFormChange }: EmailComposeProps) {
-  const handleInputChange = (field: keyof ComposeForm, value: string | string[] | { filename: string; size: number; type: string; file: File }[]) => {
-    if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
-      onFormChange((prev) => ({ ...prev, [field]: value }));
-    } else {
-      onFormChange((prev) => ({ ...prev, [field]: value }));
-    }
+  const handleInputChange = (field: keyof ComposeForm, value: ComposeForm[keyof ComposeForm]) => {
+    onFormChange((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
+  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
 
     const maxFileSize = 10 * 1024 * 1024; // 10MB per file
     const maxTotalSize = 100 * 1024 * 1024; // 100MB total
 
     const newAttachments: ComposeAttachment[] = [];
+    const filesArray: File[] = Array.from(e.target.files);
     let totalSize = composeForm.attachments.reduce((sum, att) => sum + att.size, 0);
 
-    for (const file of Array.from(e.target.files)) {
+    for (const file of filesArray) {
       // Validate file size
       if (file.size > maxFileSize) {
         alert(`File ${file.name} is too large. Maximum size per file is 10MB.`);
@@ -52,13 +49,14 @@ export function EmailCompose({ composeForm, sending, onCancel, onSubmit, onSaveD
         break;
       }
 
-      newAttachments.push({
+      const attachment: ComposeAttachment = {
         id: crypto.randomUUID(),
         name: file.name,
         size: file.size,
         type: file.type,
-        file,
-      });
+        file: file,
+      };
+      newAttachments.push(attachment);
       totalSize += file.size;
     }
 
@@ -122,7 +120,7 @@ export function EmailCompose({ composeForm, sending, onCancel, onSubmit, onSaveD
               type="text"
               value={composeForm.cc.join(', ')}
               onChange={(e) =>
-                handleInputChange('cc', e.target.value.split(',').map((s) => s.trim()).filter(Boolean))
+                handleInputChange('cc', e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean))
               }
               className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="cc@example.com (optional)"
@@ -134,7 +132,7 @@ export function EmailCompose({ composeForm, sending, onCancel, onSubmit, onSaveD
               type="text"
               value={composeForm.bcc.join(', ')}
               onChange={(e) =>
-                handleInputChange('bcc', e.target.value.split(',').map((s) => s.trim()).filter(Boolean))
+                handleInputChange('bcc', e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean))
               }
               className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="bcc@example.com (optional)"

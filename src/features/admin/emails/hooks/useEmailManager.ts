@@ -7,18 +7,20 @@
  * @module useEmailManager
  */
 
-import { useState, useCallback, useEffect, FormEvent, useMemo } from 'react';
-import { EmailInbound, EmailOutbound } from '../../../../types';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import type { FormEvent } from 'react';
+import { EmailInbound, EmailOutbound, EmailAttachment } from '../../../../types';
 import { useToastSuccess, useToastError } from '../../../shared/ui';
-import { useAuthStore } from '../../../auth/store';
+import { useAuthStore } from '../../../../store/authStore';
 import { emailInboundService } from '../../../../services/supabase/email-inbound.service';
 import { emailOutboundService } from '../../../../services/supabase/email-outbound.service';
 import { supabase } from '../../../../config/supabase';
+import { storageService } from '../../../../services/storage.service';
 
 /**
  * Attachment during compose (includes File object)
  */
-interface ComposeAttachment {
+export interface ComposeAttachment {
   id: string;
   name: string;
   size: number;
@@ -38,10 +40,17 @@ interface OutboundAttachment {
 
 /**
  * Unified email type for UI (combines inbound + outbound)
+ * All properties are made optional to allow accessing them without type errors
  */
-export type UnifiedEmail = EmailInbound & {
-  type: 'inbox';
-} | (EmailOutbound & { type: 'sent' | 'draft' });
+export type UnifiedEmail = (EmailInbound & { type: 'inbox'; }) | (EmailOutbound & {
+  type: 'sent' | 'draft';
+  threadId?: string;
+  senderName?: string;
+  senderEmail?: string;
+  isRead?: boolean;
+  receivedAt?: string;
+  attachments?: EmailAttachment[];
+});
 
 /**
  * Email compose form data structure
@@ -76,8 +85,8 @@ async function uploadAttachments(
 
   for (const attachment of attachments) {
     try {
-      // Upload to Cloudinary
-      const result = await storageService.uploadImage(attachment.file, 'email-attachments');
+      // Upload to Cloudinary (supports any file type)
+      const result = await storageService.uploadFile(attachment.file, 'email-attachments');
 
       outboundAttachments.push({
         filename: attachment.name,
@@ -188,6 +197,9 @@ export interface UseEmailManagerReturn {
 
   /** Set search query */
   setSearchQuery: (query: string) => void;
+
+  /** Save email as draft */
+  saveAsDraft: () => Promise<void>;
 }
 
 /**
@@ -205,6 +217,8 @@ export interface UseEmailManagerReturn {
  */
 export function useEmailManager(): UseEmailManagerReturn {
   const { user, emailAliasId } = useAuthStore();
+  const showSuccess = useToastSuccess();
+  const showError = useToastError();
 
   // ============ State ============
 
@@ -248,12 +262,7 @@ export function useEmailManager(): UseEmailManagerReturn {
   /** Search query */
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Toast notifications
-  const showSuccess = useToastSuccess();
-  const showError = useToastError();
-
-  // Search state
-  const [searchQuery, setSearchQuery] = useState('');
+  /** Debounced search query for actual searching */
   const [searchDebounced, setSearchDebounced] = useState('');
 
   // ============ Computed Values ============
@@ -261,7 +270,7 @@ export function useEmailManager(): UseEmailManagerReturn {
   /** Count of unread inbox emails (only for inbox filter) */
   const unreadCount = useMemo(() => {
     if (filter !== 'inbox') return 0;
-    return emails.filter((e): e is UnifiedEmail & { type: 'inbox' } => e.type === 'inbox' && !e.is_read).length;
+    return emails.filter((e): e is UnifiedEmail & { type: 'inbox' } => e.type === 'inbox' && !e.isRead).length;
   }, [emails, filter]);
 
   // ============ Email Fetching ============
@@ -372,7 +381,7 @@ export function useEmailManager(): UseEmailManagerReturn {
     setMobileView('detail');
 
     // Mark as read if unread inbox email
-    if (email.type === 'inbox' && !email.is_read) {
+    if (email.type === 'inbox' && !email.isRead) {
       try {
         await emailInboundService.markAsRead(email.id);
         // Refresh to update read status
@@ -496,7 +505,19 @@ export function useEmailManager(): UseEmailManagerReturn {
 
       // Convert attachments to base64 if any
       const attachments = composeForm.attachments.length > 0
-        ? await convertAttachmentsToBase64(composeForm.attachments)
+        ? await Promise.all(composeForm.attachments.map(async (att) => {
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(att.file);
+            });
+            return {
+              filename: att.name,
+              content: base64.split(',')[1],
+              type: att.type,
+            };
+          }))
         : undefined;
 
       // Upload attachments to Cloudinary if any
@@ -507,6 +528,7 @@ export function useEmailManager(): UseEmailManagerReturn {
 
       // Send via emailOutboundService (this handles Resend integration)
       await emailOutboundService.sendEmail(emailAliasId, {
+        aliasId: emailAliasId,
         recipientEmail: composeForm.to,
         cc: composeForm.cc,
         bcc: composeForm.bcc,
@@ -612,5 +634,6 @@ export function useEmailManager(): UseEmailManagerReturn {
     // Search
     searchQuery,
     setSearchQuery,
+    saveAsDraft,
   };
 }

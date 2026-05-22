@@ -4,10 +4,12 @@ import { authService } from '../services/auth.service';
 
 interface AuthState {
   user: User | null;
+  emailAliasId: string | undefined;
   isLoading: boolean;
   error: string | null;
   initialized: boolean;
   setUser: (user: User | null) => void;
+  setEmailAliasId: (aliasId: string | undefined) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   login: (email: string, password: string) => Promise<void>;
@@ -17,11 +19,13 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
+  emailAliasId: undefined,
   isLoading: true,
   error: null,
   initialized: false,
 
   setUser: (user) => set({ user, isLoading: false }),
+  setEmailAliasId: (emailAliasId) => set({ emailAliasId }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error, isLoading: false }),
 
@@ -41,7 +45,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
     try {
       await authService.signOut();
-      set({ user: null, isLoading: false, error: null });
+      set({ user: null, emailAliasId: undefined, isLoading: false, error: null });
     } catch (error: any) {
       set({ error: error.message, isLoading: false });
     }
@@ -50,17 +54,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   initialize: () => {
     // Subscribe to Firebase auth state changes
     const unsubscribe = authService.onAuthStateChange((user) => {
-      set({ user, isLoading: false, initialized: true });
+      set({ user, emailAliasId: user?.emailAliasId, isLoading: false, initialized: true });
     });
 
     return unsubscribe;
   },
-}));
-
-// Hook to initialize auth on app start
-export const useInitializeAuth = () => {
-  const initialize = useAuthStore((state) => state.initialize);
-  const initialized = useAuthStore((state) => state.initialized);
-
-  return { initialize, initialized };
-};
+}))
