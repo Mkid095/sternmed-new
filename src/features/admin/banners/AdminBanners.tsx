@@ -353,35 +353,35 @@ function BannerModal({ formData, onChange, onSubmit, onClose, isUploading }: Ban
               </span>
             </p>
           </div>
-        </form>
 
-        {/* Footer */}
-        <div className="flex gap-3 p-4 border-t border-slate-200 bg-white sm:bg-slate-50 pb-20 sm:pb-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-xl transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isUploading || !formData.imageUrl}
-            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 disabled:bg-slate-300 disabled:cursor-not-allowed rounded-xl transition-colors flex items-center justify-center gap-2"
-          >
-            {isUploading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white"></div>
-                Adding...
-              </>
-            ) : (
-              <>
-                <Plus size={16} />
-                Add Banner
-              </>
-            )}
-          </button>
-        </div>
+          {/* Footer - Moved inside form */}
+          <div className="flex gap-3 p-4 border-t border-slate-200 bg-white sm:bg-slate-50 mt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-xl transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isUploading || !formData.imageUrl}
+              className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 disabled:bg-slate-300 disabled:cursor-not-allowed rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              {isUploading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white"></div>
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Plus size={16} />
+                  Add Banner
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
