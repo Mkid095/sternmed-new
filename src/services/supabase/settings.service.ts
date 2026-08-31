@@ -1,5 +1,5 @@
 import { supabase } from '../../config/supabase';
-import { SiteSettings } from '../../types';
+import { SiteSettings, HomepageSection, DEFAULT_HOMEPAGE_SECTIONS } from '../../types';
 
 // Mapping from SiteSettings fields to database keys
 const SETTING_KEYS: Record<string, string> = {
@@ -12,6 +12,7 @@ const SETTING_KEYS: Record<string, string> = {
   featuredSectionEnabled: 'featured_section_enabled',
   featuredProductCount: 'featured_product_count',
   prominentCategories: 'prominent_categories',
+  homepageSections: 'homepage_sections',
 };
 
 const DEFAULT_SETTINGS: SiteSettings = {
@@ -24,6 +25,7 @@ const DEFAULT_SETTINGS: SiteSettings = {
   featuredSectionEnabled: true,
   featuredProductCount: 8,
   prominentCategories: [],
+  homepageSections: DEFAULT_HOMEPAGE_SECTIONS,
 };
 
 /**
@@ -43,10 +45,11 @@ function parseValue(field: string, value: string): unknown {
     case 'featuredProductCount':
       return parseInt(value, 10) || 8;
     case 'prominentCategories':
+    case 'homepageSections':
       try {
         return JSON.parse(value);
       } catch {
-        return [];
+        return field === 'homepageSections' ? DEFAULT_HOMEPAGE_SECTIONS : [];
       }
     default:
       return value;

@@ -248,6 +248,35 @@ export interface SiteSettings {
   updatedAt?: string;
 }
 
+/**
+ * Homepage section configuration
+ */
+export interface HomepageSection {
+  id: string;         // Unique identifier for the section type
+  type: string;       // Section type: 'hero', 'featured-products', 'categories', 'promotional-banner'
+  enabled: boolean;   // Whether section is shown
+  position: number;   // Order position (0 = first)
+  config?: Record<string, unknown>; // Section-specific configuration
+}
+
+/**
+ * Available homepage section types
+ */
+export type HomepageSectionType =
+  | 'hero'           // Hero banner carousel
+  | 'featured-products'  // Featured products section
+  | 'categories'     // Category sections
+  | 'promotional-banner'; // Promotional banners
+
+/**
+ * Default homepage section configuration
+ */
+export const DEFAULT_HOMEPAGE_SECTIONS: HomepageSection[] = [
+  { id: 'hero', type: 'hero', enabled: true, position: 0 },
+  { id: 'featured-products', type: 'featured-products', enabled: true, position: 1, config: { productCount: 8 } },
+  { id: 'categories', type: 'categories', enabled: true, position: 2 },
+];
+
 export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
 export type PaymentMethod = 'whatsapp' | 'card' | 'mpesa' | 'bank_transfer';

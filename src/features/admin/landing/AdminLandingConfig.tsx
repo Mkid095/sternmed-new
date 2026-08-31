@@ -179,6 +179,12 @@ export default function AdminLandingConfig() {
     try {
       // Persist order changes (only for visible section matters for home page)
       await api.reorderCategories(renumberedSection.map(c => ({ id: c.id, order: c.order })));
+
+      // Also update prominentCategories in site_settings to unify ordering systems
+      // This ensures AdminLandingConfig and AdminSettings use the same ordering
+      const prominentCategoryIds = renumberedSection.map(c => c.id);
+      await api.updateSettings({ prominentCategories: prominentCategoryIds });
+
       showSuccess('Category order updated');
     } catch (error) {
       console.error('Failed to reorder categories:', error);

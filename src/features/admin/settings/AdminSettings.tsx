@@ -13,13 +13,13 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Settings, Save, Star, Globe, Lock, Unlock, AlertTriangle } from 'lucide-react';
+import { Settings, Save, Star, Globe, Lock, Unlock, AlertTriangle, LayoutTemplate, Package, GripVertical, Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
 import { Input } from '../../shared/ui';
 import { Button } from '../../shared/ui';
 import { useSettingsManager } from './hooks';
 import { api } from '../../../services/api';
 import { setDevelopmentMode as setDevMode, isDevelopmentMode as checkDevMode } from '../../../services/siteSettings.service';
-import { Category, SiteSettings } from '../../../types';
+import { Category, SiteSettings, HomepageSection, DEFAULT_HOMEPAGE_SECTIONS } from '../../../types';
 import { useToastSuccess, useToastError } from '../../shared/ui';
 
 /**
@@ -213,17 +213,7 @@ function TabButton({ tab, active, onClick, children }: TabButtonProps) {
  * Settings form with tab content
  */
 interface SettingsFormProps {
-  settings: Partial<{
-    phoneNumber: string;
-    email: string;
-    address: string;
-    aboutText: string;
-    privacyPolicy: string;
-    termsOfService: string;
-    featuredSectionEnabled?: boolean;
-    featuredProductCount?: number;
-    prominentCategories?: string[];
-  }>;
+  settings: Partial<SiteSettings>;
   activeTab: 'general' | 'homepage' | 'legal' | 'site-status';
   categories: Category[];
   draggedCategory: string | null;
@@ -540,17 +530,47 @@ function GeneralSettings({ settings, onChange }: GeneralSettingsProps) {
  * Home Page settings form fields
  */
 interface HomePageSettingsProps {
-  settings: Partial<{
-    featuredSectionEnabled?: boolean;
-    featuredProductCount?: number;
-    prominentCategories?: string[];
-  }>;
+  settings: Partial<SiteSettings>;
   categories: Category[];
   draggedCategory: string | null;
   setDraggedCategory: (id: string | null) => void;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   setSettings: React.Dispatch<React.SetStateAction<Partial<SiteSettings>>>;
 }
+
+/**
+ * Section configuration metadata
+ */
+const SECTION_CONFIG = {
+  hero: {
+    label: 'Hero Banner',
+    description: 'Main landing page hero with carousel',
+    icon: LayoutTemplate,
+    color: 'bg-gradient-to-br from-slate-800 to-slate-900',
+    iconColor: 'text-white',
+  },
+  'featured-products': {
+    label: 'Featured Products',
+    description: 'Showcase featured/promoted products',
+    icon: Star,
+    color: 'bg-gradient-to-br from-blue-500 to-blue-700',
+    iconColor: 'text-white',
+  },
+  categories: {
+    label: 'Product Categories',
+    description: 'Display product category sections',
+    icon: Package,
+    color: 'bg-gradient-to-br from-emerald-500 to-emerald-700',
+    iconColor: 'text-white',
+  },
+  'promotional-banner': {
+    label: 'Promotional Banner',
+    description: 'Special offers and promotions',
+    icon: Eye,
+    color: 'bg-gradient-to-br from-amber-500 to-amber-700',
+    iconColor: 'text-white',
+  },
+} as const;
 
 function HomePageSettings({
   settings,
@@ -560,61 +580,112 @@ function HomePageSettings({
   onChange,
   setSettings,
 }: HomePageSettingsProps) {
-    // Compute ordered categories based on prominentCategories order
-    const getOrderedCategories = (): Category[] => {
-      if (!settings.prominentCategories || settings.prominentCategories.length === 0) {
-        // Default: alphabetical by name
-        return [...categories].sort((a, b) => a.name.localeCompare(b.name));
+  const [sectionDragged, setSectionDragged] = useState<string | null>(null);
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
+
+  // Get homepage sections from settings or use defaults
+  const homepageSections: HomepageSection[] = settings.homepageSections || DEFAULT_HOMEPAGE_SECTIONS;
+
+  // Compute ordered categories based on prominentCategories order
+  const getOrderedCategories = (): Category[] => {
+    if (!settings.prominentCategories || settings.prominentCategories.length === 0) {
+      return [...categories].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    const categoryMap = new Map(categories.map(c => [c.id, c]));
+    const ordered: Category[] = [];
+    for (const id of settings.prominentCategories) {
+      const cat = categoryMap.get(id);
+      if (cat) {
+        ordered.push(cat);
+        categoryMap.delete(id);
       }
-      const categoryMap = new Map(categories.map(c => [c.id, c]));
-      const ordered: Category[] = [];
-      for (const id of settings.prominentCategories) {
-        const cat = categoryMap.get(id);
-        if (cat) {
-          ordered.push(cat);
-          categoryMap.delete(id);
-        }
-      }
-      ordered.push(...categoryMap.values());
-      return ordered;
-    };
-    const sortedCategories = getOrderedCategories();
-  const handleToggleFeatured = () => {
-    const event = {
-      target: {
-        name: 'featuredSectionEnabled',
-        value: settings.featuredSectionEnabled ? 'false' : 'true',
-      },
-    } as React.ChangeEvent<HTMLInputElement>;
-    onChange(event);
+    }
+    ordered.push(...categoryMap.values());
+    return ordered;
+  };
+  const sortedCategories = getOrderedCategories();
+
+  // ============ Section Handlers ============
+
+  const handleToggleSection = (sectionId: string) => {
+    const newSections = homepageSections.map(s =>
+      s.id === sectionId ? { ...s, enabled: !s.enabled } : s
+    );
+    setSettings(prev => ({ ...prev, homepageSections: newSections }));
+
+    // Also update legacy fields for backwards compatibility
+    if (sectionId === 'featured-products') {
+      const section = newSections.find(s => s.id === sectionId);
+      setSettings(prev => ({ ...prev, featuredSectionEnabled: section?.enabled ?? true }));
+    }
   };
 
-  const handleFeaturedCountChange = (value: string) => {
-    const event = {
-      target: {
-        name: 'featuredProductCount',
-        value,
-      },
-    } as React.ChangeEvent<HTMLInputElement>;
-    onChange(event);
-  };
-
-  const handleDragStart = (e: React.DragEvent, id: string) => {
-    setDraggedCategory(id);
+  const handleSectionDragStart = (e: React.DragEvent, sectionId: string) => {
+    setSectionDragged(sectionId);
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleSectionDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = (e: React.DragEvent, targetId: string) => {
+  const handleSectionDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!sectionDragged || sectionDragged === targetId) {
+      setSectionDragged(null);
+      return;
+    }
+
+    const currentOrder = homepageSections.map(s => s.id);
+    const draggedIdx = currentOrder.indexOf(sectionDragged);
+    const targetIdx = currentOrder.indexOf(targetId);
+
+    if (draggedIdx === -1 || targetIdx === -1 || draggedIdx === targetIdx) {
+      setSectionDragged(null);
+      return;
+    }
+
+    // Reorder sections
+    const newSections = [...homepageSections];
+    const [removed] = newSections.splice(draggedIdx, 1);
+    newSections.splice(targetIdx, 0, removed);
+
+    // Update positions
+    const positionedSections = newSections.map((s, idx) => ({ ...s, position: idx }));
+
+    setSettings(prev => ({ ...prev, homepageSections: positionedSections }));
+    setSectionDragged(null);
+  };
+
+  const handleFeaturedCountChange = (value: string) => {
+    const count = parseInt(value, 10) || 8;
+    setSettings(prev => ({ ...prev, featuredProductCount: count }));
+
+    // Update in sections config too
+    const newSections = homepageSections.map(s =>
+      s.id === 'featured-products' ? { ...s, config: { ...s.config, productCount: count } } : s
+    );
+    setSettings(prev => ({ ...prev, homepageSections: newSections }));
+  };
+
+  // ============ Category Drag Handlers ============
+
+  const handleCategoryDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedCategory(id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleCategoryDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleCategoryDrop = async (e: React.DragEvent, targetId: string) => {
     e.preventDefault();
     const draggedId = draggedCategory;
     if (!draggedId) return;
 
-    // Get current order: either from prominentCategories or from current sorted list
     const currentOrder = settings.prominentCategories && settings.prominentCategories.length > 0
       ? settings.prominentCategories
       : sortedCategories.map(c => c.id);
@@ -627,109 +698,212 @@ function HomePageSettings({
       return;
     }
 
-    // Reorder: remove from old position, insert at target position
     const newOrder = [...currentOrder];
     newOrder.splice(draggedIndex, 1);
     newOrder.splice(targetIndex, 0, draggedId);
 
-    // Update settings state
-    setSettings(prev => ({
-      ...prev,
-      prominentCategories: newOrder,
-    }));
+    setSettings(prev => ({ ...prev, prominentCategories: newOrder }));
+
+    // Also persist to categories.order to keep AdminLandingConfig in sync
+    try {
+      const categoryOrders = newOrder
+        .filter(id => categories.some(c => c.id === id))
+        .map((id, index) => ({ id, order: index }));
+      await api.reorderCategories(categoryOrders);
+    } catch (error) {
+      console.error('Failed to sync category order:', error);
+    }
 
     setDraggedCategory(null);
   };
 
+  // Sort sections by position for display
+  const sortedSections = [...homepageSections].sort((a, b) => a.position - b.position);
+  const featuredSection = sortedSections.find(s => s.id === 'featured-products');
+  const categoriesSection = sortedSections.find(s => s.id === 'categories');
+
   return (
-    <div className="space-y-6">
-      {/* Featured Section Toggle */}
-      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-            <Star size={20} className="text-blue-600" />
-          </div>
+    <div className="space-y-8">
+      {/* Homepage Sections Configuration */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-semibold text-slate-900">Featured Products Section</h3>
-            <p className="text-sm text-slate-500">Show featured products on home page</p>
+            <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+              <LayoutTemplate size={18} className="text-primary-600" />
+              Homepage Sections
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Drag sections to control the order they appear on your website
+            </p>
           </div>
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
+          >
+            <Eye size={14} />
+            Preview Homepage
+          </a>
         </div>
-        <button
-          type="button"
-          onClick={handleToggleFeatured}
-          className={`
-            relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
-            ${settings.featuredSectionEnabled !== false ? 'bg-primary-600' : 'bg-slate-300'}
-          `}
-          aria-checked={settings.featuredSectionEnabled !== false}
-          role="switch"
-        >
-          <span
-            className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
-              settings.featuredSectionEnabled !== false ? 'translate-x-7' : 'translate-x-1'
-            }`}
-          />
-        </button>
+
+        {/* Section Cards */}
+        <div className="space-y-3">
+          {sortedSections.map((section, index) => {
+            const config = SECTION_CONFIG[section.type as keyof typeof SECTION_CONFIG];
+            if (!config) return null;
+            const IconComponent = config.icon;
+            const isExpanded = expandedSection === section.id;
+            const isDragging = sectionDragged === section.id;
+
+            return (
+              <div
+                key={section.id}
+                draggable
+                onDragStart={(e) => handleSectionDragStart(e, section.id)}
+                onDragOver={handleSectionDragOver}
+                onDrop={(e) => handleSectionDrop(e, section.id)}
+                className={`bg-white rounded-xl border-2 transition-all ${
+                  isDragging
+                    ? 'opacity-50 border-primary-300 shadow-lg'
+                    : 'border-slate-200 hover:border-primary-200 hover:shadow-sm'
+                }`}
+              >
+                <div className="flex items-center gap-4 p-4">
+                  {/* Drag Handle */}
+                  <div className={`cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 ${isDragging ? 'opacity-50' : ''}`}>
+                    <GripVertical size={20} />
+                  </div>
+
+                  {/* Section Icon */}
+                  <div className={`w-10 h-10 rounded-lg ${config.color} flex items-center justify-center shrink-0`}>
+                    <IconComponent size={20} className={config.iconColor} />
+                  </div>
+
+                  {/* Section Info */}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-semibold text-slate-900">{config.label}</h4>
+                    <p className="text-xs text-slate-500 truncate">{config.description}</p>
+                  </div>
+
+                  {/* Position Badge */}
+                  <div className="hidden sm:flex items-center gap-1 text-xs text-slate-400">
+                    <span className="font-medium">#{index + 1}</span>
+                  </div>
+
+                  {/* Expand/Collapse for sections with config */}
+                  {(section.id === 'featured-products' || section.id === 'categories') && (
+                    <button
+                      type="button"
+                      onClick={() => setExpandedSection(isExpanded ? null : section.id)}
+                      className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </button>
+                  )}
+
+                  {/* Toggle Switch */}
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSection(section.id)}
+                    className={`relative w-12 h-7 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                      section.enabled ? 'bg-primary-600' : 'bg-slate-300'
+                    }`}
+                    aria-checked={section.enabled}
+                    role="switch"
+                  >
+                    <span
+                      className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
+                        section.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Expanded Config */}
+                {isExpanded && section.id === 'featured-products' && (
+                  <div className="px-4 pb-4 border-t border-slate-100 pt-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Number of Featured Products
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <Input
+                        type="number"
+                        value={settings.featuredProductCount || featuredSection?.config?.productCount || 8}
+                        onChange={(e) => handleFeaturedCountChange(e.target.value)}
+                        min={1}
+                        max={20}
+                        className="w-24"
+                      />
+                      <span className="text-xs text-slate-500">
+                        products will be displayed (1-20)
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Featured Product Count */}
-      {settings.featuredSectionEnabled !== false && (
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            Number of Featured Products
-          </label>
-          <Input
-            type="number"
-            id="featuredProductCount"
-            name="featuredProductCount"
-            value={settings.featuredProductCount || 4}
-            onChange={(e) => handleFeaturedCountChange(e.target.value)}
-            min={1}
-            max={12}
-          />
-          <p className="text-xs text-slate-500 mt-1">
-            Number of products to display in the featured section (1-12)
-          </p>
-        </div>
-      )}
+      {/* Divider */}
+      <div className="border-t border-slate-200" />
 
-      {/* Category Order */}
+      {/* Category Display Order */}
       <div>
-        <h3 className="text-sm font-medium text-slate-700 mb-3">
-          Category Display Order (Home Page)
+        <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2 mb-1">
+          <Package size={18} className="text-emerald-600" />
+          Category Display Order
         </h3>
-        <p className="text-xs text-slate-500 mb-3">
-          Drag to reorder categories shown on the home page
+        <p className="text-xs text-slate-500 mb-4">
+          Controls the order of categories within the Categories section on the homepage
         </p>
-        <div className="space-y-2">
-          {sortedCategories.map((category, index) => (
-            <div
-              key={category.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, category.id)}
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, category.id)}
-              className={`flex items-center gap-3 p-3 bg-white border-2 rounded-lg cursor-move transition-all ${
-                draggedCategory === category.id
-                  ? 'opacity-50 border-primary-300'
-                  : 'border-slate-200 hover:bg-slate-50 hover:border-primary-200'
-              }`}
-            >
-              <div className="cursor-move text-slate-400">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                </svg>
+
+        {sortedCategories.length > 0 ? (
+          <div className="space-y-2">
+            {sortedCategories.map((category, index) => (
+              <div
+                key={category.id}
+                draggable
+                onDragStart={(e) => handleCategoryDragStart(e, category.id)}
+                onDragOver={handleCategoryDragOver}
+                onDrop={(e) => handleCategoryDrop(e, category.id)}
+                className={`flex items-center gap-3 p-3 bg-white border-2 rounded-lg cursor-move transition-all ${
+                  draggedCategory === category.id
+                    ? 'opacity-50 border-primary-300'
+                    : 'border-slate-200 hover:bg-slate-50 hover:border-primary-200'
+                }`}
+              >
+                <div className="cursor-grab active:cursor-grabbing text-slate-400">
+                  <GripVertical size={18} />
+                </div>
+                {category.image && (
+                  <img
+                    src={category.image}
+                    alt=""
+                    className="w-8 h-8 rounded object-cover shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                )}
+                <span className="flex-1 text-sm font-medium text-slate-700 truncate">{category.name}</span>
+                <span className="text-xs font-semibold text-primary-600 bg-primary-50 px-2 py-1 rounded">
+                  #{index + 1}
+                </span>
               </div>
-              <span className="flex-1 text-sm font-medium text-slate-700">{category.name}</span>
-              <span className="text-xs font-semibold text-primary-600">#{index + 1}</span>
-            </div>
-          ))}
-          {categories.length === 0 && (
-            <p className="text-sm text-slate-500 text-center py-4">
-              No categories set to show on home page. Enable "Show on Home" in category settings.
+            ))}
+          </div>
+        ) : (
+          <div className="bg-slate-50 rounded-lg p-6 text-center">
+            <Package size={32} className="text-slate-300 mx-auto mb-2" />
+            <p className="text-sm text-slate-500">
+              No categories set to show on home page.
             </p>
-          )}
-        </div>
+            <p className="text-xs text-slate-400 mt-1">
+              Enable "Show on Home" in category settings to display them here.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
