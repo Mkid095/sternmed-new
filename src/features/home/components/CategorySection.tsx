@@ -87,8 +87,8 @@ export function CategorySection({ category, products, onAddToCart }: CategorySec
 
   return (
     <section className="mb-10 sm:mb-12">
-      {/* Section Header - simplified, no big icon */}
-      <div className="flex items-center justify-between mb-4 px-4 sm:px-0">
+      {/* Section Header */}
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-lg sm:text-xl font-semibold text-slate-900">{category.name}</h2>
           <p className="text-xs text-slate-500">
@@ -96,7 +96,7 @@ export function CategorySection({ category, products, onAddToCart }: CategorySec
           </p>
         </div>
 
-        {/* View All Button - smaller, simpler */}
+        {/* View All Button */}
         <a
           href={`/shop?category=${category.id}`}
           className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 font-medium transition-colors"
@@ -112,7 +112,7 @@ export function CategorySection({ category, products, onAddToCart }: CategorySec
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Scroll Buttons - smaller, less rounded */}
+        {/* Scroll Buttons */}
         {canScrollLeft && (
           <button
             onClick={() => scroll('left')}
@@ -135,7 +135,7 @@ export function CategorySection({ category, products, onAddToCart }: CategorySec
         {/* Horizontal Scroll Container */}
         <div
           ref={scrollRef}
-          className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth px-4 sm:px-0 -mx-4 sm:mx-0 pb-2 scrollbar-hide"
+          className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-2 scrollbar-hide"
           style={{
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
