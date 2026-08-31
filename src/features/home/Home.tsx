@@ -201,13 +201,24 @@ export default function Home() {
     }
   };
 
+  // Separate hero from other sections
+  const heroSection = sortedSections.find(s => s.type === 'hero' && s.enabled);
+  const contentSections = sortedSections.filter(s => s.enabled && (s.type === 'featured-products' || s.type === 'categories'));
+
   return (
     <div className="flex flex-col">
-      {/* Render sections based on configuration */}
-      {sortedSections.map(renderSection)}
+      {/* Hero Section - full width, no padding */}
+      {heroSection && renderSection(heroSection)}
 
-      {/* Empty State - only show if no sections are enabled */}
-      {!hasAnySection && (
+      {/* Content Sections - with proper padding */}
+      <div className="bg-gradient-to-b from-slate-50 to-white py-4 sm:py-6 lg:py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {contentSections.map(section => renderSection(section))}
+        </div>
+      </div>
+
+      {/* Empty State - only show if no content sections and no hero */}
+      {!heroSection && contentSections.length === 0 && (
         <div className="bg-gradient-to-b from-slate-50 to-white py-4 sm:py-6 lg:py-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 text-center">
