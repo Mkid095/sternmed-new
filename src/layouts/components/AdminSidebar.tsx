@@ -18,6 +18,7 @@ const navItems: NavItem[] = [
   { to: '/admin/landing-config', icon: LayoutTemplate, label: 'Landing Config' },
   { to: '/admin/banners', icon: ImageIcon, label: 'Banners' },
   { to: '/admin/mails', icon: Mail, label: 'Mails', adminOnly: true },
+  { to: '/admin/emails', icon: Mail, label: 'Email Platform' },
   { to: '/admin/users', icon: Users, label: 'Users & Roles', adminOnly: true },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
 ];

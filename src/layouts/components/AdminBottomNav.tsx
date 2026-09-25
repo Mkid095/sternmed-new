@@ -32,6 +32,7 @@ const menuItems: NavItem[] = [
   { to: '/admin/landing-config', icon: LayoutDashboard, label: 'Landing Page' },
   { to: '/admin/banners', icon: ImageIcon, label: 'Banners' },
   { to: '/admin/mails', icon: Mail, label: 'Mails', adminOnly: true },
+  { to: '/admin/emails', icon: Mail, label: 'Emails' },
   { to: '/admin/users', icon: Users, label: 'Users', adminOnly: true },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
