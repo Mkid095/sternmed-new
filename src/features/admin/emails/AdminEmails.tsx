@@ -82,22 +82,36 @@ export default function AdminEmails() {
 
   // ============ Delete Confirmation ============
 
+  // Refs to track the email being deleted (avoids race conditions).
+  // Declared BEFORE useConfirmationModal so hooks ordering is stable and
+  // readable. We capture the email ID at click time so the onConfirm callback
+  // uses the right email even if selectedEmail changes (e.g. user clicks
+  // another email while the modal is open).
+  const pendingDeleteEmailIdRef = useRef<string | null>(null);
+  const pendingDeleteEmailTypeRef = useRef<'inbox' | 'sent' | 'draft' | null>(null);
+
   /**
    * Confirmation modal for email deletion
-   * Different behavior for inbox vs sent emails
    *
-   * NOTE: The onConfirm callback is invoked by useConfirmationModal's handleConfirm
-   * which runs AFTER close() is called. So we store the email ID separately
-   * to avoid race conditions where selectedEmail becomes null before softDelete runs.
+   * CRITICAL: The onConfirm callback is INVOKED INSIDE the async
+   * handleConfirm in ConfirmationModal.tsx, which calls onConfirm()
+   * and then onClose() in sequence (not awaited together). The Promise
+   * returned by confirm() resolves as soon as close() runs - BEFORE
+   * onConfirm completes.
+   *
+   * To avoid this race condition:
+   * 1. We capture email ID/type in refs at click time
+   * 2. We do not rely on selectedEmail inside the onConfirm callback
+   * 3. We update UI state (selectedEmail, mobileView) AFTER softDelete resolves
    */
   const deleteConfirmation = useConfirmationModal(
     async () => {
-      // Use ref to track the email ID at confirmation time, not at modal open time
-      // This avoids race conditions where selectedEmail changes between open and confirm
       const emailToDelete = pendingDeleteEmailIdRef.current;
-      if (!emailToDelete) return;
-
       const emailType = pendingDeleteEmailTypeRef.current;
+
+      if (!emailToDelete) {
+        return;
+      }
 
       try {
         if (emailType === 'inbox') {
@@ -105,35 +119,33 @@ export default function AdminEmails() {
         } else {
           await emailOutboundService.softDelete(emailToDelete);
         }
-        // Clear pending refs
+
+        // Clear refs only after successful delete
         pendingDeleteEmailIdRef.current = null;
         pendingDeleteEmailTypeRef.current = null;
+
+        // Clear UI state and refresh
         setSelectedEmail(null);
         setMobileView('list');
         await refresh();
       } catch (error) {
         console.error('Failed to delete email:', error);
-        // Don't clear refs on error so user can retry
-        throw error; // Re-throw to prevent modal from closing on error
+        // Re-throw so callers know the operation failed
+        throw error;
       }
     }
   );
-
-  // Refs to track the email being deleted (avoids race conditions)
-  const pendingDeleteEmailIdRef = useRef<string | null>(null);
-  const pendingDeleteEmailTypeRef = useRef<'inbox' | 'sent' | 'draft' | null>(null);
 
   /**
    * Handle delete email button click
    * Opens confirmation dialog
    *
-   * Stores email ID and type in refs so that when the user confirms,
-   * we delete the correct email even if selectedEmail has changed
-   * (e.g., user clicked another email while modal was open)
+   * Captures email ID and type in refs so the onConfirm handler
+   * deletes the correct email even if selectedEmail changes while
+   * the modal is open (user clicks another email).
    */
   const handleDeleteClick = useCallback(() => {
     if (selectedEmail) {
-      // Store the email info in refs for the confirmation handler to use
       pendingDeleteEmailIdRef.current = selectedEmail.id;
       pendingDeleteEmailTypeRef.current = selectedEmail.type;
       deleteConfirmation.open({
