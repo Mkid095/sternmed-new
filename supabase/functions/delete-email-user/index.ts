@@ -84,9 +84,12 @@ serve(async (req) => {
 
     const firebaseResult = await firebaseResponse.json();
     if (!firebaseResponse.ok) {
-      console.error('Firebase deletion error:', firebaseResult);
-      // Continue to delete Supabase records even if Firebase delete fails? Might be okay if user already deleted.
-    }
+      // CRITICAL: Do NOT continue if Firebase deletion fails.
+      // If we delete Supabase records but Firebase user remains,
+      // the email cannot be reused (Firebase EMAIL_EXISTS on recreate).
+      const errorMsg = firebaseResult?.error?.message || firebaseResult.error || 'Unknown Firebase error';
+      console.error('Firebase deletion failed:', errorMsg);
+      throw new Error(`Failed to delete Firebase user: ${errorMsg}. Supabase records were NOT deleted.`);
 
     // Delete all related records that block the alias FK
     // These tables have NO ACTION constraints on alias_id, so we must delete first
