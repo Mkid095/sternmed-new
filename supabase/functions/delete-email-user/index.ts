@@ -51,7 +51,15 @@ serve(async (req) => {
     }
 
     if (!user) {
-      // No user associated, just delete alias (if still exists)
+      // No user associated, but we still need to delete related records
+      // due to NO ACTION FK constraints on email tables
+      await Promise.all([
+        supabase.from('email_inbound').delete().eq('alias_id', aliasId),
+        supabase.from('email_outbound').delete().eq('alias_id', aliasId),
+        supabase.from('emails').delete().eq('alias_id', aliasId),
+        supabase.from('email_alias_limits').delete().eq('alias_id', aliasId),
+        supabase.from('email_inbound_unassigned').delete().eq('assigned_alias_id', aliasId),
+      ]);
       await supabase.from('email_aliases').delete().eq('id', aliasId);
       return new Response(JSON.stringify({ success: true, message: 'Alias deleted (no associated user)' }), {
         status: 200,
@@ -79,6 +87,16 @@ serve(async (req) => {
       console.error('Firebase deletion error:', firebaseResult);
       // Continue to delete Supabase records even if Firebase delete fails? Might be okay if user already deleted.
     }
+
+    // Delete all related records that block the alias FK
+    // These tables have NO ACTION constraints on alias_id, so we must delete first
+    await Promise.all([
+      supabase.from('email_inbound').delete().eq('alias_id', aliasId),
+      supabase.from('email_outbound').delete().eq('alias_id', aliasId),
+      supabase.from('emails').delete().eq('alias_id', aliasId),
+      supabase.from('email_alias_limits').delete().eq('alias_id', aliasId),
+      supabase.from('email_inbound_unassigned').delete().eq('assigned_alias_id', aliasId),
+    ]);
 
     // Delete associated user record
     await supabase.from('users').delete().eq('id', user.id);
