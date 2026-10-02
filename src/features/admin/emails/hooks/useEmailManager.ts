@@ -220,6 +220,12 @@ export function useEmailManager(): UseEmailManagerReturn {
   const showSuccess = useToastSuccess();
   const showError = useToastError();
 
+  // Admins don't have a single email_alias_id (they manage all aliases),
+  // so they should see ALL emails across all aliases. Email users are
+  // scoped to their own alias only.
+  const isAdmin = user?.role === 'admin';
+  const effectiveAliasId = isAdmin ? undefined : emailAliasId;
+
   // ============ State ============
 
   /** All emails (already filtered by current filter) */
@@ -276,10 +282,13 @@ export function useEmailManager(): UseEmailManagerReturn {
   // ============ Email Fetching ============
 
   /**
-   * Fetch emails for the current filter and page
+   * Fetch emails for the current filter and page.
+   *
+   * Admins see ALL emails across all aliases (no alias filter).
+   * Email users are scoped to their own alias_id.
    */
   const fetchEmails = useCallback(async (pageNum: number = 1, append: boolean = false, search: string = '') => {
-    if (!emailAliasId) {
+    if (!isAdmin && !effectiveAliasId) {
       setLoading(false);
       return;
     }
@@ -291,30 +300,29 @@ export function useEmailManager(): UseEmailManagerReturn {
       if (filter === 'inbox') {
         // Fetch inbound emails (received)
         if (search.trim()) {
-          result = await emailInboundService.searchEmails(emailAliasId, search.trim(), {
-            page: pageNum,
-            pageSize: 20,
-          });
+          result = await emailInboundService.searchEmails(
+            effectiveAliasId ?? null,
+            search.trim(),
+            { page: pageNum, pageSize: 20 }
+          );
         } else {
-          result = await emailInboundService.getInboundEmails(emailAliasId, {
-            page: pageNum,
-            pageSize: 20,
-          });
+          result = await emailInboundService.getInboundEmails(
+            effectiveAliasId ?? null,
+            { page: pageNum, pageSize: 20 }
+          );
         }
       } else if (filter === 'sent') {
         // Fetch outbound emails (sent)
-        result = await emailOutboundService.getOutboundEmails(emailAliasId, {
-          page: pageNum,
-          pageSize: 20,
-          status: 'sent',
-        });
+        result = await emailOutboundService.getOutboundEmails(
+          effectiveAliasId ?? null,
+          { page: pageNum, pageSize: 20, status: 'sent' }
+        );
       } else {
         // Drafts
-        result = await emailOutboundService.getOutboundEmails(emailAliasId, {
-          page: pageNum,
-          pageSize: 20,
-          status: 'pending',
-        });
+        result = await emailOutboundService.getOutboundEmails(
+          effectiveAliasId ?? null,
+          { page: pageNum, pageSize: 20, status: 'pending' }
+        );
       }
 
       const unifiedEmails: UnifiedEmail[] = result.data.map((email) => ({
@@ -331,7 +339,7 @@ export function useEmailManager(): UseEmailManagerReturn {
     } finally {
       setLoading(false);
     }
-  }, [emailAliasId, filter, showError]);
+  }, [isAdmin, effectiveAliasId, filter, showError]);
 
   /**
    * Load next page

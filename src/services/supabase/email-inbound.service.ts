@@ -76,10 +76,11 @@ export interface PaginatedResult<T> {
  */
 export const emailInboundService = {
   /**
-   * Get inbound emails for an alias with pagination
+   * Get inbound emails for an alias with pagination.
+   * If aliasId is null, returns emails from ALL aliases (admin view).
    */
   async getInboundEmails(
-    aliasId: string,
+    aliasId: string | null,
     options: {
       page?: number;
       pageSize?: number;
@@ -99,9 +100,13 @@ export const emailInboundService = {
     let query = supabase
       .from('email_inbound')
       .select('*', { count: 'exact' })
-      .eq('alias_id', aliasId)
       .is('deleted_at', null)
       .order('received_at', { ascending: false });
+
+    // Only filter by alias_id when one is provided (admin view passes null)
+    if (aliasId) {
+      query = query.eq('alias_id', aliasId);
+    }
 
     if (unreadOnly) {
       query = query.eq('is_read', false);

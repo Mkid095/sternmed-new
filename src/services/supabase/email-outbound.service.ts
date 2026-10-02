@@ -110,10 +110,11 @@ export interface RateLimitInfo {
  */
 export const emailOutboundService = {
   /**
-   * Get outbound emails for an alias with pagination
+   * Get outbound emails for an alias with pagination.
+   * If aliasId is null, returns emails from ALL aliases (admin view).
    */
   async getOutboundEmails(
-    aliasId: string,
+    aliasId: string | null,
     options: {
       page?: number;
       pageSize?: number;
@@ -125,9 +126,13 @@ export const emailOutboundService = {
     let query = supabase
       .from('email_outbound')
       .select('*', { count: 'exact' })
-      .eq('alias_id', aliasId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
+
+    // Only filter by alias_id when one is provided (admin view passes null)
+    if (aliasId) {
+      query = query.eq('alias_id', aliasId);
+    }
 
     if (status) {
       query = query.eq('status', status);
