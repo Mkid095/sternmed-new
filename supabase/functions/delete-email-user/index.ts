@@ -1,8 +1,149 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// ---------------------------------------------------------------------------
+// Firebase Admin Auth via REST API (Deno-compatible)
+// Uses a service account to get an OAuth2 access token, then calls
+// Firebase Auth REST API to delete the user.
+// ---------------------------------------------------------------------------
+
+interface ServiceAccount {
+  project_id: string;
+  client_email: string;
+  private_key: string;
+}
+
+interface GoogleOAuthToken {
+  access_token: string;
+  expires_in: number;
+}
+
+/**
+ * Build a signed JWT for Google OAuth2 service account auth.
+ * Implements RS256 JWT signing without any Node.js crypto dependencies.
+ */
+async function getGoogleAccessToken(
+  serviceAccount: ServiceAccount
+): Promise<GoogleOAuthToken> {
+  const now = Math.floor(Date.now() / 1000);
+  const expiry = now + 3600;
+
+  const header = base64urlEncode(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const payload = base64urlEncode(
+    JSON.stringify({
+      iss: serviceAccount.client_email,
+      scope: 'https://www.googleapis.com/auth/cloud-platform',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: expiry,
+    })
+  );
+  const signingInput = `${header}.${payload}`;
+
+  // Import the RSA private key
+  const pemKey = serviceAccount.private_key
+    .replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/\n/g, '');
+
+  const binaryKey = Uint8Array.from(atob(pemKey), (c) => c.charCodeAt(0));
+  const privateKey = await crypto.subtle.importKey(
+    'pkcs8',
+    binaryKey,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    privateKey,
+    new TextEncoder().encode(signingInput)
+  );
+  const sig = base64urlEncode(
+    String.fromCharCode(...new Uint8Array(signature))
+  );
+
+  const jwt = `${signingInput}.${sig}`;
+
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt,
+    }),
+  });
+
+  const data = await tokenResponse.json() as GoogleOAuthToken | { error: string; error_description: string };
+  if (!tokenResponse.ok) {
+    throw new Error(`OAuth2 token error: ${(data as { error_description: string }).error_description || (data as { error: string }).error}`);
+  }
+  return data as GoogleOAuthToken;
+}
+
+/** Encode a string to base64url (URL-safe base64, no padding) */
+function base64urlEncode(str: string): string {
+  return btoa(str).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+/**
+ * Delete a Firebase user using the Firebase Auth REST API.
+ * Requires a valid Google OAuth2 access token from a service account.
+ */
+async function deleteFirebaseUser(
+  uid: string,
+  accessToken: string,
+  projectId: string
+): Promise<void> {
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:delete?key=${Deno.env.get('FIREBASE_API_KEY')}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ localId: uid }),
+    }
+  );
+
+  if (!response.ok) {
+    const data = await response.json() as { error?: { message?: string } };
+    const msg = data?.error?.message || `HTTP ${response.status}`;
+    throw new Error(`Firebase delete failed: ${msg}`);
+  }
+}
+
+/**
+ * Get the service account credentials from the GOOGLE_APPLICATION_CREDENTIALS
+ * secret. In Supabase Edge Functions, this env var holds the raw JSON string
+ * of the service account key (not a file path).
+ */
+function getServiceAccount(): ServiceAccount {
+  const credsJson = Deno.env.get('GOOGLE_APPLICATION_CREDENTIALS');
+  if (!credsJson) {
+    throw new Error(
+      'GOOGLE_APPLICATION_CREDENTIALS secret is not set. ' +
+      'Add the full service account JSON as a secret in Supabase Edge Function settings.'
+    );
+  }
+  try {
+    const creds = JSON.parse(credsJson) as ServiceAccount;
+    if (!creds.project_id || !creds.client_email || !creds.private_key) {
+      throw new Error('Service account JSON is missing required fields');
+    }
+    return creds;
+  } catch (err) {
+    throw new Error(`Failed to parse GOOGLE_APPLICATION_CREDENTIALS: ${err.message}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main request handler
+// ---------------------------------------------------------------------------
+
 serve(async (req) => {
-  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: {
@@ -34,7 +175,6 @@ serve(async (req) => {
       });
     }
 
-    // Get Supabase service role key
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -51,8 +191,7 @@ serve(async (req) => {
     }
 
     if (!user) {
-      // No user associated, but we still need to delete related records
-      // due to NO ACTION FK constraints on email tables
+      // No user associated — still need to clean up related records before deleting alias
       await Promise.all([
         supabase.from('email_inbound').delete().eq('alias_id', aliasId),
         supabase.from('email_outbound').delete().eq('alias_id', aliasId),
@@ -67,32 +206,27 @@ serve(async (req) => {
       });
     }
 
-    // Delete Firebase user
-    const firebaseApiKey = Deno.env.get('FIREBASE_API_KEY');
-    if (!firebaseApiKey) {
-      throw new Error('FIREBASE_API_KEY not configured');
+    // -------------------------------------------------------------------
+    // Delete Firebase user via REST API using service account
+    // -------------------------------------------------------------------
+    const serviceAccount = getServiceAccount();
+    const { access_token } = await getGoogleAccessToken(serviceAccount);
+
+    try {
+      await deleteFirebaseUser(user.firebase_uid, access_token, serviceAccount.project_id);
+    } catch (firebaseError: any) {
+      // USER_NOT_FOUND — Firebase user already gone, which is fine
+      if (firebaseError.message.includes('USER_NOT_FOUND') || firebaseError.message.includes('user-not-found')) {
+        console.warn(`Firebase user ${user.firebase_uid} already deleted, continuing...`);
+      } else {
+        // Real error — abort so Supabase records stay intact for retry
+        throw firebaseError;
+      }
     }
 
-    const firebaseResponse = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/projects/sternmed-new/accounts:delete?key=${firebaseApiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ localId: user.firebase_uid }),
-      }
-    );
-
-    const firebaseResult = await firebaseResponse.json();
-    if (!firebaseResponse.ok) {
-      // CRITICAL: Do NOT continue if Firebase deletion fails.
-      // If we delete Supabase records but Firebase user remains,
-      // the email cannot be reused (Firebase EMAIL_EXISTS on recreate).
-      const errorMsg = firebaseResult?.error?.message || firebaseResult.error || 'Unknown Firebase error';
-      console.error('Firebase deletion failed:', errorMsg);
-      throw new Error(`Failed to delete Firebase user: ${errorMsg}. Supabase records were NOT deleted.`);
-
-    // Delete all related records that block the alias FK
-    // These tables have NO ACTION constraints on alias_id, so we must delete first
+    // -------------------------------------------------------------------
+    // Clean up Supabase records (required due to NO ACTION FK constraints)
+    // -------------------------------------------------------------------
     await Promise.all([
       supabase.from('email_inbound').delete().eq('alias_id', aliasId),
       supabase.from('email_outbound').delete().eq('alias_id', aliasId),
