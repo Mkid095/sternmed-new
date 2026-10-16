@@ -1,4 +1,5 @@
 import { Product, Category, User, EmailMessage, Banner, SiteSettings, Order } from '../types';
+import { auth } from '../config/firebase';
 import { authService } from './auth.service';
 import { databaseService } from './database.service';
 import { storageService } from './storage.service';
@@ -47,6 +48,39 @@ export const api = {
 
   updateUserRole: async (id: string, role: 'admin' | 'staff'): Promise<User> => {
     return databaseService.updateUserRole(id, role);
+  },
+
+  /**
+   * Set a new password for a user (admin only).
+   *
+   * Firebase password changes must happen server-side with a service account,
+   * so this calls the set-user-password edge function. The caller's Firebase ID
+   * token is sent so the function can verify they are an admin.
+   */
+  setUserPassword: async (userId: string, password: string): Promise<void> => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+    // Must be signed in — the edge function authorizes on this token
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('You must be signed in to change a password');
+    }
+    const idToken = await currentUser.getIdToken();
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/set-user-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ userId, password }),
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(result?.error || 'Failed to update password');
+    }
   },
 
   // Products (Supabase)

@@ -30,6 +30,9 @@ import { api } from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
 import { ConfirmationModal, useConfirmationModal, useToastSuccess, useToastError } from '../../shared/ui';
 
+/** Minimum password length (mirrors Firebase Auth's floor) */
+const MIN_PASSWORD_LENGTH = 8;
+
 /**
  * Admin Users Page Component
  *
@@ -46,6 +49,7 @@ export default function AdminUsers() {
   const [isAdding, setIsAdding] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -127,11 +131,42 @@ export default function AdminUsers() {
       return;
     }
 
+    const newPassword = formData.password.trim();
+
+    // Validate before doing anything, so we never half-apply a change
+    if (editingUser && newPassword && newPassword.length < MIN_PASSWORD_LENGTH) {
+      showError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+      return;
+    }
+
+    setSaving(true);
+
     try {
       if (editingUser) {
-        // For editing, only update role if changed
-        if (formData.role !== editingUser.role) {
+        // Track what actually changed so we only report real updates
+        const roleChanged = formData.role !== editingUser.role;
+        const passwordChanged = newPassword.length > 0;
+
+        if (!roleChanged && !passwordChanged) {
+          showError('Nothing to update');
+          return;
+        }
+
+        // Password first: if it fails, the role is left untouched so the
+        // admin can retry without wondering which half landed.
+        if (passwordChanged) {
+          await api.setUserPassword(editingUser.id, newPassword);
+        }
+
+        if (roleChanged) {
           await api.updateUserRole(editingUser.id, formData.role);
+        }
+
+        if (passwordChanged && roleChanged) {
+          showSuccess(`Password and role updated for ${editingUser.name}`);
+        } else if (passwordChanged) {
+          showSuccess(`Password updated for ${editingUser.name}`);
+        } else {
           showSuccess(`User role updated to ${formData.role}`);
         }
       } else {
@@ -145,6 +180,8 @@ export default function AdminUsers() {
     } catch (error: any) {
       console.error('Failed to save user', error);
       showError(error.message || (editingUser ? 'Failed to update user' : 'Failed to add user'));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -324,6 +361,7 @@ export default function AdminUsers() {
           onSubmit={handleSubmit}
           onClose={closeForm}
           isEditing={!!editingUser}
+          saving={saving}
         />
       )}
 
@@ -533,9 +571,10 @@ interface UserFormModalProps {
   onSubmit: (e: FormEvent) => void;
   onClose: () => void;
   isEditing: boolean;
+  saving?: boolean;
 }
 
-function UserFormModal({ formData, onChange, onSubmit, onClose, isEditing }: UserFormModalProps) {
+function UserFormModal({ formData, onChange, onSubmit, onClose, isEditing, saving }: UserFormModalProps) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md max-h-[90vh] overflow-hidden flex flex-col">
@@ -578,19 +617,23 @@ function UserFormModal({ formData, onChange, onSubmit, onClose, isEditing }: Use
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Password {!isEditing && '*'}
+                {isEditing ? 'New Password' : 'Password *'}
               </label>
               <input
                 type="password"
                 required={!isEditing}
+                minLength={!isEditing ? MIN_PASSWORD_LENGTH : undefined}
+                autoComplete="new-password"
                 value={formData.password}
                 onChange={(e) => onChange({ ...formData, password: e.target.value })}
                 placeholder={isEditing ? 'Leave empty to keep current' : '••••••••'}
                 className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
-              {isEditing && (
-                <p className="text-xs text-slate-400 mt-1">Leave empty to keep current password</p>
-              )}
+              <p className="text-xs text-slate-400 mt-1">
+                {isEditing
+                  ? `Set a new password (min ${MIN_PASSWORD_LENGTH} characters). Leave empty to keep the current one.`
+                  : `At least ${MIN_PASSWORD_LENGTH} characters.`}
+              </p>
             </div>
 
             <div>
@@ -634,7 +677,8 @@ function UserFormModal({ formData, onChange, onSubmit, onClose, isEditing }: Use
             {isEditing && (
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
                 <p className="text-sm text-amber-800">
-                  <strong>Edit Mode:</strong> You can only change the user's role. Other details cannot be modified.
+                  <strong>Edit Mode:</strong> You can change the user's role and set a new
+                  password. Name and email cannot be modified.
                 </p>
               </div>
             )}
@@ -645,15 +689,17 @@ function UserFormModal({ formData, onChange, onSubmit, onClose, isEditing }: Use
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-xl transition-colors"
+              disabled={saving}
+              className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors"
+              disabled={saving}
+              className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isEditing ? 'Update User' : 'Add User'}
+              {saving ? 'Saving...' : isEditing ? 'Update User' : 'Add User'}
             </button>
           </div>
         </form>
