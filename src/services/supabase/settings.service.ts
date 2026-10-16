@@ -17,7 +17,10 @@ const SETTING_KEYS: Record<string, string> = {
 };
 
 const DEFAULT_SETTINGS: SiteSettings = {
-  phoneNumber: '+254 700 000 000',
+  // Empty, not a placeholder number: a placeholder would be picked up as a
+  // real contact by resolveWhatsAppNumber() and route enquiries to a number
+  // nobody owns. Empty means "not configured" and the UI hides the buttons.
+  phoneNumber: '',
   whatsappNumber: '',
   email: 'info@sternmed.afrika',
   address: 'Nairobi, Kenya',
