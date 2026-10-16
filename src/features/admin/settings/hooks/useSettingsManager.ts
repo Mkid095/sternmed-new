@@ -51,6 +51,7 @@ export interface UseSettingsManagerReturn {
  */
 const INITIAL_SETTINGS: Partial<SiteSettings> = {
   phoneNumber: '',
+  whatsappNumber: '',
   email: '',
   address: '',
   aboutText: '',

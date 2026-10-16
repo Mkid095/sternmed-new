@@ -4,6 +4,7 @@ import { SiteSettings, HomepageSection, DEFAULT_HOMEPAGE_SECTIONS } from '../../
 // Mapping from SiteSettings fields to database keys
 const SETTING_KEYS: Record<string, string> = {
   phoneNumber: 'phone_number',
+  whatsappNumber: 'whatsapp_number',
   email: 'email',
   address: 'address',
   aboutText: 'about_text',
@@ -17,6 +18,7 @@ const SETTING_KEYS: Record<string, string> = {
 
 const DEFAULT_SETTINGS: SiteSettings = {
   phoneNumber: '+254 700 000 000',
+  whatsappNumber: '',
   email: 'info@sternmed.afrika',
   address: 'Nairobi, Kenya',
   aboutText: 'Your trusted partner in medical consumables and equipment across Africa.',
@@ -34,6 +36,7 @@ const DEFAULT_SETTINGS: SiteSettings = {
 function parseValue(field: string, value: string): unknown {
   switch (field) {
     case 'phoneNumber':
+    case 'whatsappNumber':
     case 'email':
     case 'address':
     case 'aboutText':
@@ -154,6 +157,36 @@ export async function updateSetting(key: string, value: string): Promise<void> {
   if (error) {
     throw error;
   }
+}
+
+// ============ WhatsApp Contact Resolution ============
+
+/**
+ * Strip a phone number down to wa.me-compatible digits.
+ *
+ * Keeps digits and a single leading `+` so `tel:` links still work,
+ * then wa.me gets only the digits.
+ */
+export function toWaDigits(phone: string): string {
+  return phone.replace(/\D/g, '');
+}
+
+/**
+ * Resolve the WhatsApp contact number from site settings.
+ *
+ * Prefers the dedicated `whatsapp_number` setting so admin can route
+ * enquiries and checkout hand-off to a different line than the general
+ * contact number. Falls back to `phone_number` when unset.
+ *
+ * @param settings - Site settings (may be null while loading)
+ * @returns Digits-only number suitable for a wa.me URL, or null if neither is set
+ */
+export function resolveWhatsAppNumber(
+  settings: Partial<SiteSettings> | null | undefined
+): string | null {
+  const candidate = settings?.whatsappNumber?.trim() || settings?.phoneNumber?.trim();
+  if (!candidate) return null;
+  return toWaDigits(candidate) || null;
 }
 
 // ============ Service Object (for backward compatibility) ============

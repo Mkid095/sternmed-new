@@ -469,6 +469,7 @@ function SiteStatusSettings({ isDevelopmentMode, onToggle, togglingMode }: SiteS
 interface GeneralSettingsProps {
   settings: Partial<{
     phoneNumber: string;
+    whatsappNumber: string;
     email: string;
     address: string;
     aboutText: string;
@@ -495,6 +496,20 @@ function GeneralSettings({ settings, onChange }: GeneralSettingsProps) {
           label="Contact Email"
           value={settings.email || ''}
           onChange={onChange}
+        />
+      </div>
+
+      {/* WhatsApp Checkout / Enquiry Number */}
+      <div className="mt-4 sm:mt-6">
+        <Input
+          id="whatsappNumber"
+          name="whatsappNumber"
+          type="tel"
+          label="WhatsApp Number (enquiries & checkout)"
+          value={settings.whatsappNumber || ''}
+          onChange={onChange}
+          placeholder={settings.phoneNumber || '254799526972'}
+          helperText="Product enquiry buttons and checkout send customers to this number via wa.me. Leave blank to use the Phone Number above. Include the country code (e.g. 254799526972)."
         />
       </div>
 

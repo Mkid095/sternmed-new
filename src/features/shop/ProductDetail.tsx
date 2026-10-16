@@ -6,10 +6,11 @@
  * @module ProductDetail
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, ShoppingBag, Package, Truck, Shield, MessageCircle } from 'lucide-react';
 import { api } from '../../services/api';
+import { resolveWhatsAppNumber } from '../../services/supabase/settings.service';
 import { Product, SiteSettings } from '../../types';
 import { generateWhatsAppLink } from '../../constants';
 import { useCartStore } from '../../store/cartStore';
@@ -59,6 +60,23 @@ export default function ProductDetail() {
   useEffect(() => {
     api.getSettings().then(setSettings).catch(console.error);
   }, []);
+
+  /**
+   * Open WhatsApp with an enquiry for this product.
+   * Uses the admin-configured WhatsApp number, falling back to the contact phone number.
+   */
+  const handleEnquire = useCallback(() => {
+    if (!product) return;
+
+    const phone = resolveWhatsAppNumber(settings);
+    if (!phone) {
+      showError('Enquiries are temporarily unavailable. Please contact us directly.');
+      return;
+    }
+
+    const message = `Hi, I'd like to enquire about: ${product.name}`;
+    window.open(generateWhatsAppLink(phone, message), '_blank');
+  }, [product, settings, showError]);
 
   // Get all images for this product (main image + gallery if available)
   const productImages = product?.images?.length
@@ -161,11 +179,7 @@ export default function ProductDetail() {
 
           {product.status === 'coming_soon' ? (
             <button
-              onClick={() => {
-                const phone = settings?.phoneNumber || '254700000000';
-                const message = `Hi, I'd like to enquire about: ${product.name}`;
-                window.open(generateWhatsAppLink(phone, message), '_blank');
-              }}
+              onClick={handleEnquire}
               className="mb-4 py-3 px-6 bg-primary-600 text-white rounded font-medium hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
             >
               <MessageCircle size={20} />
@@ -249,11 +263,7 @@ export default function ProductDetail() {
           {product.status === 'coming_soon' && (
             <div className="mt-auto">
               <button
-                onClick={() => {
-                  const phone = settings?.phoneNumber || '254700000000';
-                  const message = `Hi, I'd like to enquire about: ${product.name}`;
-                  window.open(generateWhatsAppLink(phone, message), '_blank');
-                }}
+                onClick={handleEnquire}
                 className="w-full flex items-center justify-center gap-2 py-3 bg-primary-600 text-white rounded font-medium hover:bg-primary-700 transition-colors"
               >
                 <MessageCircle size={18} />

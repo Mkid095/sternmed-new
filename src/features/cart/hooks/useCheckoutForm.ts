@@ -437,6 +437,12 @@ export function useCheckoutForm({
         return;
       }
 
+      // Bail before creating an order we can't hand off to WhatsApp
+      if (!whatsappNumber.replace(/\D/g, '')) {
+        showError('Checkout is temporarily unavailable. Please contact us directly.');
+        return;
+      }
+
       setIsSubmitting(true);
 
       try {

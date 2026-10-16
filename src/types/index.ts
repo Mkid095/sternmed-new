@@ -236,6 +236,12 @@ export interface Banner {
 export interface SiteSettings {
   id?: string;
   phoneNumber: string;
+  /**
+   * Dedicated WhatsApp contact number (digits, e.g. "254799526972").
+   * Used for all wa.me links: product enquiries and checkout hand-off.
+   * Falls back to phoneNumber when not set.
+   */
+  whatsappNumber?: string;
   email: string;
   address: string;
   aboutText: string;

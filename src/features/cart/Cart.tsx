@@ -18,6 +18,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, ShoppingCart } from 'lucide-react';
 import { useCartStore } from '../../store/cartStore';
 import { api } from '../../services/api';
+import { resolveWhatsAppNumber } from '../../services/supabase/settings.service';
 import { SiteSettings } from '../../types';
 import { CartList } from './components/CartList';
 import { CheckoutForm } from './components/CheckoutForm';
@@ -39,6 +40,9 @@ export default function Cart() {
 
   const { items, removeItem, updateQuantity, totalPrice, clearCart } = useCartStore();
   const [settings, setSettings] = useState<SiteSettings | null>(null);
+
+  /** WhatsApp number to hand the order off to (admin-configurable) */
+  const whatsappNumber = resolveWhatsAppNumber(settings) ?? '';
 
   // ============ Data Fetching ============
 
@@ -87,7 +91,7 @@ export default function Cart() {
         <CheckoutForm
           items={items}
           totalPrice={totalPrice()}
-          whatsappNumber={settings?.phoneNumber || '254700000000'}
+          whatsappNumber={whatsappNumber}
           onCheckoutComplete={handleCheckoutComplete}
         />
       </div>

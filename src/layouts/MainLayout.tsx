@@ -3,6 +3,7 @@ import { ShoppingCart, Phone, Mail, Menu, X } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { resolveWhatsAppNumber } from '../services/supabase/settings.service';
 import { SiteSettings, Category } from '../types';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { FloatingButtons } from '../features/shared/ui';
@@ -19,6 +20,9 @@ export default function MainLayout() {
       api.getCategories().then(setCategories).catch(console.error)
     ]);
   }, []);
+
+  // Admin-configured WhatsApp contact (falls back to the general phone number)
+  const whatsappPhone = resolveWhatsAppNumber(settings) ?? '';
 
   return (
     <div className="min-h-screen flex flex-col font-sans text-slate-900 bg-slate-50 pb-16 md:pb-0">
@@ -131,14 +135,10 @@ export default function MainLayout() {
       </footer>
 
       {/* Mobile Bottom Navigation */}
-      <MobileBottomNav
-        whatsappPhone={settings?.phoneNumber || '+254700000000'}
-      />
+      <MobileBottomNav whatsappPhone={whatsappPhone} />
 
       {/* Floating Action Buttons (WhatsApp & AI Chatbot) */}
-      <FloatingButtons
-        whatsappPhone={settings?.phoneNumber || '+254700000000'}
-      />
+      <FloatingButtons whatsappPhone={whatsappPhone} />
     </div>
   );
 }

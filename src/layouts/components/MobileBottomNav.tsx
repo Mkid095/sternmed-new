@@ -11,16 +11,17 @@ interface NavItem {
 }
 
 interface MobileBottomNavProps {
-  /** WhatsApp phone number */
+  /** WhatsApp phone number, digits only (e.g. 254700000000). Hides Contact when empty. */
   whatsappPhone?: string;
 }
 
-export function MobileBottomNav({ whatsappPhone = '+254700000000' }: MobileBottomNavProps) {
+export function MobileBottomNav({ whatsappPhone = '' }: MobileBottomNavProps) {
   const location = useLocation();
   const totalItems = useCartStore((state) => state.totalItems());
 
-  // Generate WhatsApp link
-  const whatsappLink = `https://wa.me/${whatsappPhone.replace(/\D/g, '')}`;
+  // Digits-only number for wa.me; empty when the admin hasn't set one yet
+  const waDigits = whatsappPhone.replace(/\D/g, '');
+  const whatsappLink = `https://wa.me/${waDigits}`;
 
   // Check if current path matches the nav item
   const isActive = (to: string) => {
@@ -63,17 +64,19 @@ export function MobileBottomNav({ whatsappPhone = '+254700000000' }: MobileBotto
           );
         })}
 
-        {/* Contact Button - Opens WhatsApp/Phone */}
-        <a
-          href={whatsappLink}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex flex-col items-center justify-center gap-1 min-w-0 flex-1 h-full transition-colors text-slate-500 hover:text-slate-700"
-          aria-label="Contact us"
-        >
-          <Phone size={20} strokeWidth={2.5} aria-hidden="true" />
-          <span className="text-[10px] font-medium">Contact</span>
-        </a>
+        {/* Contact Button - Opens WhatsApp (hidden until a number is configured) */}
+        {waDigits && (
+          <a
+            href={whatsappLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex flex-col items-center justify-center gap-1 min-w-0 flex-1 h-full transition-colors text-slate-500 hover:text-slate-700"
+            aria-label="Contact us"
+          >
+            <Phone size={20} strokeWidth={2.5} aria-hidden="true" />
+            <span className="text-[10px] font-medium">Contact</span>
+          </a>
+        )}
       </div>
     </nav>
   );
