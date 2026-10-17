@@ -11,6 +11,5 @@ export type {
   DashboardStats,
   MonthlyOrderData,
   CategoryDistribution,
-  WeeklyRevenue,
   UseDashboardReturn
 } from './useDashboard';

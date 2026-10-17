@@ -8,8 +8,8 @@
  */
 
 import React, { useState, FormEvent } from 'react';
-import { useNavigate, useLocation, Location } from 'react-router-dom';
-import { Lock } from 'lucide-react';
+import { useNavigate, useLocation, Link, Location } from 'react-router-dom';
+import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 
 /**
@@ -17,6 +17,45 @@ import { useAuthStore } from '../../store/authStore';
  */
 interface LocationState {
   from?: string;
+}
+
+/**
+ * Turns a Firebase error into something worth reading.
+ *
+ * Every code here used to be matched as a substring of the message. Two of the
+ * branches were unreachable: since Firebase v9 a wrong password no longer
+ * returns `auth/wrong-password` or `auth/user-not-found`, it returns a single
+ * `auth/invalid-credential` for both. Matching on the code is the only stable
+ * way to read it, and `auth/invalid-credential` deliberately gets one shared
+ * message — telling an attacker which half was right turns the login form into
+ * an account-existence oracle.
+ */
+const FIREBASE_ERRORS: Record<string, string> = {
+  'auth/invalid-credential': 'That email and password do not match an account.',
+  'auth/invalid-email': 'That does not look like a valid email address.',
+  'auth/user-disabled': 'This account has been disabled. Contact an administrator.',
+  'auth/too-many-requests': 'Too many failed attempts. Wait a few minutes, then try again.',
+  'auth/network-request-failed': 'Could not reach the server. Check your connection and try again.',
+  'auth/operation-not-allowed':
+    'Email and password sign-in is disabled for this project. Contact an administrator.',
+};
+
+function describeLoginFailure(error: unknown): string {
+  // FirebaseError exposes `code` directly; prefer it over message matching.
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code: unknown }).code)
+      : '';
+
+  if (code && FIREBASE_ERRORS[code]) return FIREBASE_ERRORS[code];
+
+  // Network failures sometimes arrive without a usable code.
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  if (message.includes('network') || message.includes('failed to fetch')) {
+    return FIREBASE_ERRORS['auth/network-request-failed'];
+  }
+
+  return 'Could not sign you in. Try again, or contact an administrator if it keeps failing.';
 }
 
 /**
@@ -34,6 +73,7 @@ interface LocationState {
 export default function AdminLogin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const navigate = useNavigate();
@@ -63,135 +103,86 @@ export default function AdminLogin() {
       const firebaseUser = credential.user;
 
       // Get the user profile from Supabase
-      let user = await usersService.getUserByFirebaseUid(firebaseUser.uid);
+      const user = await usersService.getUserByFirebaseUid(firebaseUser.uid);
 
       if (!user) {
-        setSubmitError('User not found in the system. Please contact your administrator.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Update auth store with user data before navigation
-      const { useAuthStore } = await import('../../store/authStore');
-      useAuthStore.getState().setUser(user);
-
-      // Check if user has admin or staff role
-      if (user.role !== 'admin' && user.role !== 'staff') {
-        setSubmitError('Access denied. Admin or staff access only.');
-        setIsSubmitting(false);
-        // Sign out the user
+        // Authenticated, but no profile. The session must be torn down or the
+        // auth guard would keep treating this person as signed in.
         const { signOut } = await import('firebase/auth');
         await signOut(auth);
+        setSubmitError('This account is not set up in the system. Contact an administrator.');
         return;
       }
+
+      // Role check happens BEFORE the profile is published to the store, so a
+      // non-admin session never reaches the app even for a frame.
+      if (user.role !== 'admin' && user.role !== 'staff') {
+        const { signOut } = await import('firebase/auth');
+        await signOut(auth);
+        setSubmitError('Your account does not have access to the admin portal.');
+        return;
+      }
+
+      const { useAuthStore } = await import('../../store/authStore');
+      useAuthStore.getState().setUser(user);
 
       // Navigate to the attempted URL or admin dashboard
       navigate(from, { replace: true });
     } catch (err: unknown) {
       console.error('Login error:', err);
-
-      // Handle different error types
-      let errorMessage = 'Invalid email or password';
-
-      if (err instanceof Error) {
-        const message = err.message.toLowerCase();
-
-        if (message.includes('auth/invalid-email')) {
-          errorMessage = 'Invalid email address format';
-        } else if (message.includes('auth/user-not-found')) {
-          errorMessage = 'No account found with this email';
-        } else if (message.includes('auth/wrong-password')) {
-          errorMessage = 'Incorrect password';
-        } else if (message.includes('auth/too-many-requests')) {
-          errorMessage = 'Too many failed attempts. Please try again later';
-        } else if (message.includes('auth/network-request-failed')) {
-          errorMessage = 'Network error. Please check your connection';
-        }
-      }
-
-      setSubmitError(errorMessage);
+      setSubmitError(describeLoginFailure(err));
+    } finally {
+      // Every path out of the try above — including the early returns that
+      // reject the credentials — has to clear this, or the button stays stuck
+      // on "Signing in…" with no way back.
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <LoginPageHeader />
-
-        {/* Login Card */}
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8">
-          <LoginFormHeader />
-
-          {/* Error Message */}
-          {submitError && (
-            <ErrorMessage message={submitError} />
-          )}
-
-          {/* Login Form */}
-          <LoginForm
-            email={email}
-            password={password}
-            isSubmitting={isSubmitting}
-            onEmailChange={setEmail}
-            onPasswordChange={setPassword}
-            onSubmit={handleSubmit}
+    <div className="flex min-h-screen items-center justify-center bg-white px-5 py-12">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <img
+            src="https://res.cloudinary.com/dxb22swfg/image/upload/v1765747561/Asset_4_v5ksi6.png"
+            alt="Sternmed Afrika"
+            className="mb-5 h-14 w-auto"
+            referrerPolicy="no-referrer"
           />
-
-          {/* Back Link */}
-          <div className="mt-6 pt-6 border-t border-slate-100">
-            <a href="/" className="block text-center text-sm text-slate-500 hover:text-slate-700">
-              Back to Website
-            </a>
-          </div>
+          {/*
+            One header, not two. This used to be followed by an "Admin Sign In"
+            block inside the card with its own icon tile and subtitle — the same
+            title twice, eight pixels apart, split across two containers.
+          */}
+          <h1 className="text-lg font-semibold tracking-tight text-slate-900">Admin Portal</h1>
+          <p className="mt-1 text-sm text-slate-500">Sign in to the management system.</p>
         </div>
 
-        {/* Footer Note */}
-        <p className="text-center text-xs text-slate-400 mt-4">
+        {submitError && <ErrorMessage message={submitError} />}
+
+        <LoginForm
+          email={email}
+          password={password}
+          showPassword={showPassword}
+          isSubmitting={isSubmitting}
+          onEmailChange={setEmail}
+          onPasswordChange={setPassword}
+          onTogglePassword={() => setShowPassword((visible) => !visible)}
+          onSubmit={handleSubmit}
+        />
+
+        <p className="mt-8 text-center text-xs text-slate-400">
           Restricted access. Authorized personnel only.
         </p>
-      </div>
-    </div>
-  );
-}
 
-/**
- * Login page header with logo
- */
-function LoginPageHeader() {
-  return (
-    <div className="text-center mb-8">
-      <img
-        src="https://res.cloudinary.com/dxb22swfg/image/upload/v1765747561/Asset_4_v5ksi6.png"
-        alt="Sternmed Afrika"
-        className="h-16 w-auto mx-auto mb-4"
-        referrerPolicy="no-referrer"
-      />
-      <h1 className="text-xl font-semibold text-slate-900">Admin Portal</h1>
-      <p className="text-slate-500 text-sm mt-1">
-        Sternmed Afrika Ltd Management System
-      </p>
-    </div>
-  );
-}
-
-/**
- * Login form card header
- */
-function LoginFormHeader() {
-  return (
-    <div className="mb-6 pb-6 border-b border-slate-100">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-blue-50 rounded-lg">
-          <Lock className="text-blue-600" size={20} />
-        </div>
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Admin Sign In</h2>
-          <p className="text-xs text-slate-500">
-            Enter your credentials to continue
-          </p>
-        </div>
+        <p className="mt-4 text-center">
+          <Link
+            to="/"
+            className="text-sm text-slate-500 transition-colors hover:text-slate-900"
+          >
+            Back to website
+          </Link>
+        </p>
       </div>
     </div>
   );
@@ -206,8 +197,14 @@ interface ErrorMessageProps {
 
 function ErrorMessage({ message }: ErrorMessageProps) {
   return (
-    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded">
-      <p className="text-sm text-red-600">{message}</p>
+    // role="alert" so a screen reader announces the failure the moment it
+    // appears; a failed sign-in with no announcement is a dead end.
+    <div
+      role="alert"
+      className="mb-5 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3"
+    >
+      <AlertCircle size={16} className="mt-0.5 flex-shrink-0 text-red-500" aria-hidden="true" />
+      <p className="text-sm text-red-700">{message}</p>
     </div>
   );
 }
@@ -218,26 +215,29 @@ function ErrorMessage({ message }: ErrorMessageProps) {
 interface LoginFormProps {
   email: string;
   password: string;
+  showPassword: boolean;
   isSubmitting: boolean;
   onEmailChange: (email: string) => void;
   onPasswordChange: (password: string) => void;
+  onTogglePassword: () => void;
   onSubmit: (e: React.FormEvent) => void;
 }
 
 function LoginForm({
   email,
   password,
+  showPassword,
   isSubmitting,
   onEmailChange,
   onPasswordChange,
+  onTogglePassword,
   onSubmit,
 }: LoginFormProps) {
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      {/* Email Input */}
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">
-          Email Address
+        <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-slate-700">
+          Email address
         </label>
         <input
           id="email"
@@ -245,38 +245,55 @@ function LoginForm({
           type="email"
           autoComplete="email"
           required
+          autoFocus
+          disabled={isSubmitting}
           value={email}
           onChange={(e) => onEmailChange(e.target.value)}
-          className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 transition-colors placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/25 disabled:bg-slate-50"
           placeholder="admin@sternmedafrika.com"
         />
       </div>
 
-      {/* Password Input */}
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1">
+        <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-slate-700">
           Password
         </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(e) => onPasswordChange(e.target.value)}
-          className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Enter your password"
-        />
+        <div className="relative">
+          <input
+            id="password"
+            name="password"
+            // Switching type keeps whatever the user has already typed — the
+            // common alternative unmounts and remounts the input, which drops
+            // the field's contents.
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="current-password"
+            required
+            disabled={isSubmitting}
+            value={password}
+            onChange={(e) => onPasswordChange(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 py-2.5 pl-3 pr-11 text-sm text-slate-900 transition-colors placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/25 disabled:bg-slate-50"
+            placeholder="Enter your password"
+          />
+          <button
+            type="button"
+            onClick={onTogglePassword}
+            // aria-label rather than a title tooltip: this is an icon control
+            // and its purpose is not otherwise exposed.
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            aria-pressed={showPassword}
+            className="absolute inset-y-0 right-0 grid w-11 place-items-center text-slate-400 transition-colors hover:text-slate-600"
+          >
+            {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+          </button>
+        </div>
       </div>
 
-      {/* Submit Button */}
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full py-2.5 px-4 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="mt-1 w-full rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isSubmitting ? 'Signing In...' : 'Sign In'}
+        {isSubmitting ? 'Signing in…' : 'Sign in'}
       </button>
     </form>
   );

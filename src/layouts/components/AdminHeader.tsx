@@ -1,17 +1,42 @@
 import { Menu, User, LogOut, Settings, ChevronDown } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 
+/**
+ * Page title per route.
+ *
+ * The header was rendered as `<AdminHeader onMenuClick={...} />` with no title,
+ * so it fell back to its default and every admin screen — Products, Orders,
+ * Settings and all the rest — was headed "Admin Dashboard". Deriving it from the
+ * path means each page names itself.
+ */
+const TITLES: Record<string, string> = {
+  '/admin': 'Dashboard',
+  '/admin/products': 'Products',
+  '/admin/categories': 'Categories',
+  '/admin/orders': 'Orders',
+  '/admin/landing-config': 'Landing Config',
+  '/admin/banners': 'Banners',
+  '/admin/mails': 'Mails',
+  '/admin/emails': 'Email Platform',
+  '/admin/users': 'Users & Roles',
+  '/admin/settings': 'Settings',
+};
+
 interface AdminHeaderProps {
+  /** Overrides the route-derived title. Rarely needed. */
   title?: string;
   onMenuClick?: () => void;
 }
 
-export function AdminHeader({ title = 'Admin Dashboard', onMenuClick }: AdminHeaderProps) {
-  const { user } = useAuthStore();
+export function AdminHeader({ title, onMenuClick }: AdminHeaderProps) {
+  const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const [profileOpen, setProfileOpen] = useState(false);
+
+  const heading = title ?? TITLES[location.pathname] ?? 'Admin';
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,19 +55,26 @@ export function AdminHeader({ title = 'Admin Dashboard', onMenuClick }: AdminHea
     };
   }, [profileOpen]);
 
+  /**
+   * Signs out of Firebase, then navigates.
+   *
+   * This used to clear localStorage and navigate without ever calling Firebase
+   * `signOut`. Firebase persists its session outside localStorage, so the token
+   * survived: the store still held the user, and navigating back to /admin
+   * restored the session. The header had its own copy of this handler, separate
+   * from the sidebar's, and only the sidebar's actually worked — so signing out
+   * from the profile menu (desktop and mobile) silently failed.
+   */
   const handleLogout = async () => {
     setProfileOpen(false);
     try {
-      // Clear local storage and session storage
-      localStorage.clear();
-      sessionStorage.clear();
-
-      // Navigate to login immediately
-      navigate('/admin/login', { replace: true });
+      await logout();
     } catch (error) {
+      // A failed sign-out must still land on the login screen, otherwise the
+      // person is left staring at an admin portal they believe they closed.
       console.error('Logout error:', error);
-      // Still navigate even if there's an error
-      navigate('/admin/login', { replace: true });
+    } finally {
+      navigate('/login', { replace: true });
     }
   };
 
@@ -57,7 +89,7 @@ export function AdminHeader({ title = 'Admin Dashboard', onMenuClick }: AdminHea
         >
           <Menu size={22} strokeWidth={2} />
         </button>
-        <h1 className="text-lg sm:text-xl font-semibold text-slate-800 truncate">{title}</h1>
+        <h1 className="text-lg sm:text-xl font-semibold text-slate-800 truncate">{heading}</h1>
       </div>
 
       {/* Profile Menu - Desktop */}

@@ -9,6 +9,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { api } from '../../../../services/api';
+import { chartSeries } from '../../../../theme/adminTheme';
 
 /**
  * Dashboard statistics structure
@@ -53,11 +54,13 @@ export interface CategoryDistribution {
 
 /**
  * Weekly revenue data for bar chart
+ *
+ * REMOVED with the "Revenue this week" panel. A seven-day window on a store
+ * that has taken three orders in eight months was a full-width panel that read
+ * "nothing booked" almost every time it was loaded. The calculation was deleted
+ * rather than left in place, so nothing quietly keeps paying for a chart
+ * nobody renders.
  */
-export interface WeeklyRevenue {
-  name: string;
-  amount: number;
-}
 
 /**
  * Return type for useDashboard hook
@@ -69,30 +72,43 @@ export interface UseDashboardReturn {
   /** Monthly order data for line/area charts */
   monthlyData: MonthlyOrderData[];
 
-  /** Category distribution for pie chart */
+  /** Category distribution for the catalogue ranking */
   categoryData: CategoryDistribution[];
-
-  /** Weekly revenue for bar chart */
-  weeklyRevenue: WeeklyRevenue[];
 
   /** Whether data is loading */
   loading: boolean;
+
+  /**
+   * Human-readable failure message, or null when the last fetch succeeded.
+   *
+   * This did not exist before. The hook caught every failure, logged it and
+   * left `loading` false, so a request that 500s or a session that expires
+   * mid-fetch rendered a dashboard of confident zeroes — indistinguishable
+   * from a brand-new empty store. `admin` then had no idea whether to retry
+   * or to wait for orders to appear.
+   */
+  error: string | null;
 
   /** Refresh dashboard statistics */
   refresh: () => Promise<void>;
 }
 
-// Chart colors matching brand theme (rebranded primary)
-const CHART_COLORS = [
-  '#2596be', // primary (rebranded)
-  '#f59e0b', // accent
-  '#6b9080', // secondary
-  '#8b5cf6', // purple
-  '#ef4444', // red
-  '#10b981', // green
-  '#f97316', // orange
-  '#06b6d4', // cyan
-];
+/**
+ * Turns a thrown value into something an administrator can act on.
+ *
+ * Never surfaces a raw PostgREST or Firebase message verbatim: those leak
+ * table and column names, and several read like SQL errors at an
+ * administrator who is trying to run a shop.
+ */
+function describeFetchFailure(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error) {
+    return error;
+  }
+  return 'The server could not be reached.';
+}
 
 /**
  * Custom hook for dashboard management
@@ -106,7 +122,7 @@ const CHART_COLORS = [
  *
  * @example
  * function AdminDashboard() {
- *   const { stats, monthlyData, categoryData, weeklyRevenue, loading, refresh } = useDashboard();
+ *   const { stats, monthlyData, categoryData, loading, error, refresh } = useDashboard();
  *
  *   return <DashboardPage {...} />;
  * }
@@ -125,8 +141,8 @@ export function useDashboard(): UseDashboardReturn {
 
   const [monthlyData, setMonthlyData] = useState<MonthlyOrderData[]>([]);
   const [categoryData, setCategoryData] = useState<CategoryDistribution[]>([]);
-  const [weeklyRevenue, setWeeklyRevenue] = useState<WeeklyRevenue[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // ============ Data Fetching ============
 
@@ -135,6 +151,7 @@ export function useDashboard(): UseDashboardReturn {
    */
   const fetchStats = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       // Fetch all data in parallel for better performance
       const [products, emails, users, orders, categories] = await Promise.all([
@@ -165,12 +182,9 @@ export function useDashboard(): UseDashboardReturn {
       // Calculate category distribution
       const categoryDist = calculateCategoryDistribution(products, categories);
       setCategoryData(categoryDist);
-
-      // Calculate weekly revenue (current week)
-      const weeklyData = calculateWeeklyRevenue(orders);
-      setWeeklyRevenue(weeklyData);
-    } catch (error) {
-      console.error('Failed to fetch dashboard stats:', error);
+    } catch (err) {
+      console.error('Failed to fetch dashboard stats:', err);
+      setError(describeFetchFailure(err));
     } finally {
       setLoading(false);
     }
@@ -210,55 +224,24 @@ export function useDashboard(): UseDashboardReturn {
    * Calculate product distribution by category
    */
   function calculateCategoryDistribution(products: any[], categories: any[]): CategoryDistribution[] {
-    const distribution = categories.map((cat, index) => {
-      const count = products.filter((p) => p.categoryId === cat.id).length;
-      return {
+    // Sort by count BEFORE assigning colour.
+    //
+    // Colour used to be assigned by position in the raw category list and the
+    // list was sorted afterwards, so the largest slice got whatever hue the
+    // category happened to be declared with — the dominant category could come
+    // out sage green while a near-empty one rendered brand blue. The biggest
+    // bar is the one the eye lands on, so it gets the brand colour.
+    return categories
+      .map((cat) => ({
         name: cat.name,
-        value: count,
-        color: CHART_COLORS[index % CHART_COLORS.length],
-      };
-    });
-
-    // Filter out categories with no products and sort by count
-    return distribution
+        value: products.filter((p) => p.categoryId === cat.id).length,
+      }))
       .filter((cat) => cat.value > 0)
-      .sort((a, b) => b.value - a.value);
-  }
-
-  /**
-   * Calculate weekly revenue data (current week)
-   */
-  function calculateWeeklyRevenue(orders: any[]): WeeklyRevenue[] {
-    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const today = new Date();
-    const currentDay = today.getDay();
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - (currentDay === 0 ? 6 : currentDay - 1));
-    monday.setHours(0, 0, 0, 0);
-
-    const data: WeeklyRevenue[] = dayNames.map((day, index) => {
-      const dayStart = new Date(monday);
-      dayStart.setDate(monday.getDate() + index);
-
-      const dayEnd = new Date(dayStart);
-      dayEnd.setHours(23, 59, 59, 999);
-
-      const dayOrders = orders.filter((order) => {
-        const orderDate = new Date(order.createdAt);
-        return orderDate >= dayStart && orderDate <= dayEnd;
-      });
-
-      const dayRevenue = dayOrders.reduce((sum, order) => sum + (order.total || 0), 0);
-
-      return {
-        name: day,
-        amount: dayRevenue,
-      };
-    });
-
-    // Only show days up to today
-    const todayIndex = currentDay === 0 ? 6 : currentDay - 1;
-    return data.slice(0, todayIndex + 1);
+      .sort((a, b) => b.value - a.value)
+      .map((cat, index) => ({
+        ...cat,
+        color: chartSeries[index % chartSeries.length],
+      }));
   }
 
   /**
@@ -277,8 +260,8 @@ export function useDashboard(): UseDashboardReturn {
     stats,
     monthlyData,
     categoryData,
-    weeklyRevenue,
     loading,
+    error,
     refresh,
   };
 }

@@ -30,7 +30,7 @@ export default function AdminLayout() {
 
   if (isLoading || !initialized) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           <p className="text-slate-600">Loading...</p>
@@ -42,7 +42,17 @@ export default function AdminLayout() {
   if (!user) return null;
 
   return (
-    <div className="h-screen flex bg-slate-100 font-sans text-slate-900">
+    /*
+      White canvas, not a grey one.
+
+      The content sat on bg-slate-100 with white cards floating on it. That
+      pushes contrast onto every individual panel — a chart on grey has no
+      surface to read against, so gridlines wash out and axis labels vanish —
+      and it produces the bordered-box look everywhere. A white canvas lets a
+      chart be simply *there* at full contrast, and separates sections with
+      hairlines instead of boxes.
+    */
+    <div className="h-screen flex bg-white font-sans text-slate-900">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
