@@ -16,7 +16,7 @@ import { ArrowLeft } from 'lucide-react';
 import { OrderStatusBadge } from './OrderStatusBadge';
 import { CustomerInfoCard } from './CustomerInfoCard';
 import { OrderSummaryCard } from './OrderSummaryCard';
-import { formatDate, shortenId, formatPaymentMethod, STATUS_COLORS } from './utils/orderFormatters';
+import { formatDate, shortenId, formatPaymentMethod } from './utils/orderFormatters';
 
 /**
  * Props for the OrderDetail component

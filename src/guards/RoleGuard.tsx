@@ -30,18 +30,4 @@ export default function RoleGuard({
 }
 
 // Higher-order component version for convenience
-export function withRoleGuard<P extends object>(
-  Component: React.ComponentType<P>,
-  allowedRoles: Role[],
-  fallback?: ReactNode
-) {
-  return function RoleGuardedComponent(props: P & { user: User | null }) {
-    const { user, ...rest } = props as P & { user: User | null };
 
-    if (!user || !allowedRoles.includes(user.role)) {
-      return <>{fallback}</>;
-    }
-
-    return <Component {...(rest as P)} />;
-  };
-}

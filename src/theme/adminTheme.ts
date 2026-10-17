@@ -141,17 +141,28 @@ export type ToneName = keyof typeof tone
 /**
  * Status pill colours, shared so an order that is "pending" looks identical on
  * the list, the detail panel and the dashboard.
+ *
+ * These replace a local `STATUS_COLORS` map in orderFormatters that used
+ * `-100`/`-800` shades while the dashboard stat row used `-50`/`-700`. The
+ * same status was rendered in two different colours depending on which screen
+ * you were on.
  */
-export const statusTone: Record<string, { fg: string; bg: string; ring: string }> = {
-  pending: { fg: 'text-amber-700', bg: 'bg-amber-50', ring: 'ring-amber-200' },
-  processing: { fg: 'text-blue-700', bg: 'bg-blue-50', ring: 'ring-blue-200' },
-  shipped: { fg: 'text-purple-700', bg: 'bg-purple-50', ring: 'ring-purple-200' },
-  delivered: { fg: 'text-emerald-700', bg: 'bg-emerald-50', ring: 'ring-emerald-200' },
-  cancelled: { fg: 'text-red-700', bg: 'bg-red-50', ring: 'ring-red-200' },
-  paid: { fg: 'text-emerald-700', bg: 'bg-emerald-50', ring: 'ring-emerald-200' },
-  unpaid: { fg: 'text-amber-700', bg: 'bg-amber-50', ring: 'ring-amber-200' },
-  failed: { fg: 'text-red-700', bg: 'bg-red-50', ring: 'ring-red-200' },
-  refunded: { fg: 'text-slate-700', bg: 'bg-slate-100', ring: 'ring-slate-200' },
+export const statusTone: Record<string, { fg: string; bg: string }> = {
+  pending: { fg: 'text-amber-700', bg: 'bg-amber-50' },
+  processing: { fg: 'text-blue-700', bg: 'bg-blue-50' },
+  shipped: { fg: 'text-purple-700', bg: 'bg-purple-50' },
+  delivered: { fg: 'text-emerald-700', bg: 'bg-emerald-50' },
+  cancelled: { fg: 'text-red-700', bg: 'bg-red-50' },
+  paid: { fg: 'text-emerald-700', bg: 'bg-emerald-50' },
+  unpaid: { fg: 'text-amber-700', bg: 'bg-amber-50' },
+  failed: { fg: 'text-red-700', bg: 'bg-red-50' },
+  refunded: { fg: 'text-slate-700', bg: 'bg-slate-100' },
+}
+
+/** Falls back to a neutral slate so an unexpected status is visibly unknown
+    rather than silently rendering unstyled. */
+export function getStatusTone(status: string): { fg: string; bg: string } {
+  return statusTone[status] ?? { fg: 'text-slate-700', bg: 'bg-slate-100' }
 }
 
 /**

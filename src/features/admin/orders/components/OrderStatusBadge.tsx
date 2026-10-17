@@ -7,7 +7,7 @@
  */
 
 import { OrderStatus } from '../../../../types';
-import { STATUS_COLORS } from './utils/orderFormatters';
+import { getStatusTone } from '../../../../theme/adminTheme';
 
 /**
  * Props for the OrderStatusBadge component
@@ -45,14 +45,17 @@ export function OrderStatusBadge({
     lg: 'text-base px-3 py-2',
   };
 
+  const tone = getStatusTone(status);
+
   return (
     <span
-      className={`
-        inline-flex items-center font-semibold rounded-full
-        ${STATUS_COLORS[status]}
-        ${sizeClasses[size]}
-        ${className}
-      `}
+      className={[
+        'inline-flex items-center font-semibold rounded-full',
+        tone.bg,
+        tone.fg,
+        sizeClasses[size],
+        className,
+      ].join(' ')}
       role="status"
       aria-label={`Order status: ${status}`}
     >
