@@ -28,8 +28,11 @@ export const databaseService = {
 
   // Banners
   getBanners: bannersService.getBanners,
+  getActiveBanners: bannersService.getActiveBanners,
   createBanner: bannersService.createBanner,
+  updateBanner: bannersService.updateBanner,
   deleteBanner: bannersService.deleteBanner,
+  reorderBanners: bannersService.reorderBanners,
 
   // Emails
   getEmails: emailsService.getEmails,
@@ -41,6 +44,7 @@ export const databaseService = {
   getUsers: usersService.getUsers,
   deleteUser: usersService.deleteUser,
   updateUserRole: usersService.updateUserRole,
+  updateUserPermissions: usersService.updateUserPermissions,
   createUser: usersService.createUser,
 
   // Settings

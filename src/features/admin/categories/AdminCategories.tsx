@@ -13,20 +13,13 @@
  */
 
 import { useState, useEffect, useMemo, FormEvent, type Key } from 'react';
-import {
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  Home,
-  X,
-  Package,
-  Eye,
-  EyeOff
-} from 'lucide-react';
+import { clsx } from 'clsx';
+import { Plus, Search, X, Home, Package } from 'lucide-react';
 import { Category } from '../../../types';
 import { api } from '../../../services/api';
-import { ImageUpload, ConfirmationModal, Modal, useConfirmationModal, useToastSuccess, useToastError } from '../../shared/ui';
+import { ImageUpload, Modal, ConfirmationModal, useConfirmationModal, useToastSuccess, useToastError } from '../../shared/ui';
+import { CategoryCard, CategoryCompactCard } from './components/CategoryCard';
+import { useIsDesktop } from '../../../hooks/useMediaQuery';
 
 /**
  * Admin Categories Page Component
@@ -43,6 +36,7 @@ export default function AdminCategories() {
   const [search, setSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const isDesktop = useIsDesktop();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -201,22 +195,34 @@ export default function AdminCategories() {
           </button>
         </div>
 
-        {/* Search Bar */}
+        {/* Search */}
         <div className="relative">
-          <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search
+            size={15}
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          />
           <input
-            type="text"
-            placeholder="Search categories..."
+            type="search"
+            placeholder="Search categories"
+            aria-label="Search categories"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className={clsx(
+              'w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 text-sm text-slate-900',
+              'placeholder:text-slate-400 transition-colors',
+              'hover:border-slate-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/25',
+              search ? 'pr-9' : 'pr-3',
+            )}
           />
           {search && (
             <button
+              type="button"
               onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
             >
-              <X size={16} />
+              <X size={14} />
             </button>
           )}
         </div>
@@ -255,30 +261,38 @@ export default function AdminCategories() {
         </div>
       ) : (
         <>
-          {/* Mobile Grid - 2 columns */}
-          <div className="grid grid-cols-2 gap-3 sm:hidden">
-            {filteredCategories.map((cat) => (
-              <CategoryCompactCard
-                key={cat.id}
-                category={cat}
-                onEdit={openEditForm}
-                onDelete={handleDelete}
-                onToggleVisibility={toggleShowOnHome}
-              />
-            ))}
-          </div>
-
-          {/* Desktop Grid - 3 columns */}
-          <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredCategories.map((cat) => (
-              <CategoryCard
-                key={cat.id}
-                category={cat}
-                onEdit={openEditForm}
-                onDelete={handleDelete}
-                onToggleVisibility={toggleShowOnHome}
-              />
-            ))}
+          {/*
+            One grid, not two. These used to be rendered side by side with one
+            hidden by `sm:hidden`, which hid it visually but not from assistive
+            technology - every category was exposed twice in the accessibility
+            tree. The card variant is now chosen by breakpoint instead.
+          */}
+          <div
+            className={
+              isDesktop
+                ? 'grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+                : 'grid grid-cols-2 gap-3'
+            }
+          >
+            {filteredCategories.map((cat) =>
+              isDesktop ? (
+                <CategoryCard
+                  key={cat.id}
+                  category={cat}
+                  onEdit={openEditForm}
+                  onDelete={handleDelete}
+                  onToggleVisibility={toggleShowOnHome}
+                />
+              ) : (
+                <CategoryCompactCard
+                  key={cat.id}
+                  category={cat}
+                  onEdit={openEditForm}
+                  onDelete={handleDelete}
+                  onToggleVisibility={toggleShowOnHome}
+                />
+              )
+            )}
           </div>
         </>
       )}
@@ -297,159 +311,8 @@ export default function AdminCategories() {
   );
 }
 
-/**
- * Category Compact Card (Mobile)
- */
-interface CategoryCardProps {
-  key?: Key;
-  category: Category & { productCount: number };
-  onEdit: (category: Category) => void;
-  onDelete: (id: string, name: string) => Promise<void>;
-  onToggleVisibility: (category: Category) => Promise<void>;
-}
-
-function CategoryCompactCard({ category, onEdit, onDelete, onToggleVisibility }: CategoryCardProps) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-      {/* Image or Placeholder */}
-      <div className="relative aspect-video bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center">
-        {category.image ? (
-          <img
-            src={category.image}
-            alt={category.name}
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <Package size={32} className="text-primary-200" />
-        )}
-
-        {/* Visibility Badge */}
-        <div className="absolute top-2 right-2">
-          <button
-            onClick={() => onToggleVisibility(category)}
-            className={`p-1.5 rounded-lg backdrop-blur-sm transition-colors ${
-              category.showOnHome
-                ? 'bg-primary-600/90 text-white'
-                : 'bg-white/80 text-slate-400 hover:text-primary-600'
-            }`}
-            title={category.showOnHome ? 'Visible on home' : 'Hidden from home'}
-          >
-            {category.showOnHome ? <Eye size={14} /> : <EyeOff size={14} />}
-          </button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="p-3">
-        <h3 className="font-semibold text-slate-900 text-sm line-clamp-1">{category.name}</h3>
-        <p className="text-xs text-slate-500 mt-1">{category.productCount} product{category.productCount !== 1 ? 's' : ''}</p>
-
-        {/* Actions */}
-        <div className="flex gap-2 mt-3">
-          <button
-            onClick={() => onEdit(category)}
-            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors"
-          >
-            <Edit size={14} />
-            Edit
-          </button>
-          <button
-            onClick={() => onDelete(category.id, category.name)}
-            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-medium transition-colors"
-          >
-            <Trash2 size={14} />
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Category Card (Desktop)
- */
-function CategoryCard({ category, onEdit, onDelete, onToggleVisibility }: CategoryCardProps) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-      {/* Image or Placeholder */}
-      <div className="relative aspect-video bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center">
-        {category.image ? (
-          <img
-            src={category.image}
-            alt={category.name}
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <Package size={48} className="text-primary-200" />
-        )}
-
-        {/* Visibility Badge */}
-        {category.showOnHome && (
-          <div className="absolute top-2 left-2 bg-primary-600 text-white px-3 py-1 rounded-lg flex items-center gap-1.5 text-sm font-medium shadow-sm">
-            <Home size={14} />
-            Visible
-          </div>
-        )}
-
-        {/* Toggle Visibility Button */}
-        <button
-          onClick={() => onToggleVisibility(category)}
-          className="absolute top-2 right-2 p-2 rounded-lg backdrop-blur-sm transition-colors bg-white/80 text-slate-600 hover:text-primary-600 hover:bg-white"
-          title={category.showOnHome ? 'Hide from home page' : 'Show on home page'}
-        >
-          {category.showOnHome ? <Eye size={18} /> : <EyeOff size={18} />}
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="p-4">
-        <h3 className="font-semibold text-slate-900 text-lg line-clamp-1">{category.name}</h3>
-        <p className="text-sm text-slate-500 mt-1 flex items-center gap-1">
-          <Package size={14} />
-          {category.productCount} product{category.productCount !== 1 ? 's' : ''}
-        </p>
-
-        {/* Actions */}
-        <div className="flex gap-2 mt-4">
-          <button
-            onClick={() => onEdit(category)}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors"
-          >
-            <Edit size={16} />
-            Edit
-          </button>
-          <button
-            onClick={() => onDelete(category.id, category.name)}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium transition-colors"
-          >
-            <Trash2 size={16} />
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Category Form Modal
- */
-interface CategoryFormModalProps {
-  key?: Key;
-  formData: {
-    name: string;
-    image: string;
-    showOnHome: boolean;
-  };
-  onChange: (data: any) => void;
-  onSubmit: (e: FormEvent) => void;
-  onClose: () => void;
-  isEditing: boolean;
-}
-
+// CategoryCard / CategoryCompactCard now live in components/CategoryCard.tsx
+// and carry a real toggle for "show on home" instead of a badge plus an eye button.
 /**
  * Add/edit category dialog.
  *
@@ -462,6 +325,14 @@ interface CategoryFormModalProps {
  * the form by id via the `form` attribute rather than by nesting — otherwise
  * the buttons could not be pinned outside the scroll area.
  */
+interface CategoryFormModalProps {
+  formData: { name: string; image: string; showOnHome: boolean };
+  onChange: (data: { name: string; image: string; showOnHome: boolean }) => void;
+  onSubmit: (e: FormEvent) => void;
+  onClose: () => void;
+  isEditing: boolean;
+}
+
 function CategoryFormModal({ formData, onChange, onSubmit, onClose, isEditing }: CategoryFormModalProps) {
   const formId = 'category-form';
 

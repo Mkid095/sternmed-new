@@ -6,6 +6,13 @@ export interface User {
   name: string;
   email: string;
   role: Role;
+  /**
+   * Admin page keys this user may open, e.g. ['orders', 'products'].
+   *
+   * Null/undefined means unrestricted, which is what admins get. Only meaningful
+   * for `staff`. See src/features/admin/permissions.ts.
+   */
+  permissions?: string[] | null;
   emailAliasId?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -230,6 +237,18 @@ export interface Banner {
   id: string;
   imageUrl: string;
   order: number;
+  /**
+   * Whether the banner is currently in the carousel. A parked banner keeps its
+   * row and its position but is not rendered on the homepage - which is what
+   * lets a draft or seasonal banner exist without being deleted.
+   */
+  isActive?: boolean;
+  /**
+   * In-app path this banner links to when clicked, e.g. '/shop',
+   * '/category/<id>', '/product/<id>'. Null means the banner is decoration
+   * only and is not clickable.
+   */
+  linkTarget?: string | null;
   createdAt?: string;
 }
 
@@ -248,9 +267,21 @@ export interface SiteSettings {
   privacyPolicy?: string;
   termsOfService?: string;
   // Home page prominence settings
+  /**
+   * @deprecated Not read by the app. This was a second on/off switch for the
+   * Featured products section, and it silently overrode the Landing page toggle
+   * in `homepageSections` — the switch an admin could see said ON while the
+   * section rendered nothing. `homepageSections` is the only control now.
+   */
   featuredSectionEnabled?: boolean;
+  /** Fallback row limit, used only when a section has no `config.productCount`. */
   featuredProductCount?: number;
   prominentCategories?: string[]; // Category IDs that should be more prominent
+  /**
+   * The blocks the home page is made of, their order, and which are on.
+   * Edited on the Landing page (`useHomeSections`), rendered by `Home`.
+   */
+  homepageSections?: HomepageSection[];
   updatedAt?: string;
 }
 
@@ -258,11 +289,32 @@ export interface SiteSettings {
  * Homepage section configuration
  */
 export interface HomepageSection {
-  id: string;         // Unique identifier for the section type
-  type: string;       // Section type: 'hero', 'featured-products', 'categories', 'promotional-banner'
+  id: string;         // Unique per section instance, not per type
+  type: string;       // See HomepageSectionType
   enabled: boolean;   // Whether section is shown
   position: number;   // Order position (0 = first)
   config?: Record<string, unknown>; // Section-specific configuration
+}
+
+/** Shape of `config` on a `cta-banner` section. */
+export interface CtaBannerConfig {
+  imageUrl: string;
+  /** In-app path, same convention as `Banner.linkTarget`. Empty = not a link. */
+  linkTarget?: string;
+  /** Only used when the image has no text of its own. */
+  alt?: string;
+  /**
+   * Render this banner immediately AFTER this category's product strip,
+   * inside the "Shop by category" block — so a banner can sit between two
+   * specific categories rather than only between top-level sections.
+   *
+   * Empty/absent means "render at the section's own position", which is the
+   * behaviour for a banner that is not tied to a category.
+   *
+   * The value is a category id. A category that is later hidden, renamed or
+   * deleted simply takes its banner with it — see the fallback in Home.tsx.
+   */
+  afterCategoryId?: string;
 }
 
 /**
@@ -272,7 +324,8 @@ export type HomepageSectionType =
   | 'hero'           // Hero banner carousel
   | 'featured-products'  // Featured products section
   | 'categories'     // Category sections
-  | 'promotional-banner'; // Promotional banners
+  | 'cta-banner'     // One admin-added call-to-action banner, in page order
+  | 'promotional-banner'; // Reserved; renders nothing
 
 /**
  * Default homepage section configuration
@@ -324,6 +377,8 @@ export interface UserRow {
   email: string;
   name: string;
   role: Role;
+  /** JSON array of admin page keys, or null for unrestricted (admins). */
+  permissions?: string[] | null;
   email_alias_id?: string;
   created_at: string;
   updated_at: string;
@@ -369,6 +424,8 @@ export interface BannerRow {
   id: string;
   image_url: string;
   display_order: number;
+  is_active: boolean;
+  link_target: string | null;
   created_at: string;
 }
 

@@ -33,12 +33,18 @@ import {
   PanelLeftOpen,
 } from 'lucide-react';
 import { User } from '../../types';
+import { canAccessPage } from '../../features/admin/permissions';
 
 interface NavItem {
   to: string;
   icon: ComponentType<{ size?: number; strokeWidth?: number }>;
   label: string;
-  adminOnly?: boolean;
+  /**
+   * Key in `users.permissions` that grants this page. See
+   * `features/admin/permissions` — the same keys the user form's toggles write,
+   * so the two cannot disagree about what "Orders" means.
+   */
+  pageKey: string;
 }
 
 interface NavGroup {
@@ -49,27 +55,27 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Overview',
-    items: [{ to: '/admin', icon: LayoutDashboard, label: 'Dashboard' }],
+    items: [{ to: '/admin', pageKey: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' }],
   },
   {
     title: 'Catalogue',
     items: [
-      { to: '/admin/products', icon: Package, label: 'Products' },
-      { to: '/admin/categories', icon: LayoutList, label: 'Categories' },
-      { to: '/admin/banners', icon: ImageIcon, label: 'Banners' },
-      { to: '/admin/landing-config', icon: LayoutTemplate, label: 'Landing page' },
+      { to: '/admin/products', pageKey: 'products', icon: Package, label: 'Products' },
+      { to: '/admin/categories', pageKey: 'categories', icon: LayoutList, label: 'Categories' },
+      { to: '/admin/banners', pageKey: 'banners', icon: ImageIcon, label: 'Banners' },
+      { to: '/admin/landing-config', pageKey: 'landing-config', icon: LayoutTemplate, label: 'Landing page' },
     ],
   },
   {
     title: 'Sales',
-    items: [{ to: '/admin/orders', icon: ShoppingCart, label: 'Orders' }],
+    items: [{ to: '/admin/orders', pageKey: 'orders', icon: ShoppingCart, label: 'Orders' }],
   },
   {
     title: 'System',
     items: [
-      { to: '/admin/mails', icon: Mail, label: 'Mails', adminOnly: true },
-      { to: '/admin/users', icon: Users, label: 'Users & roles', adminOnly: true },
-      { to: '/admin/settings', icon: Settings, label: 'Settings' },
+      { to: '/admin/mails', pageKey: 'mails', icon: Mail, label: 'Mails' },
+      { to: '/admin/users', pageKey: 'users', icon: Users, label: 'Users & roles' },
+      { to: '/admin/settings', pageKey: 'settings', icon: Settings, label: 'Settings' },
     ],
   },
 ];
@@ -173,9 +179,11 @@ export function AdminSidebar({
         aria-label="Admin sections"
       >
         {NAV_GROUPS.map((group) => {
-          const visible = group.items.filter(
-            (item) => !item.adminOnly || user.role === 'admin'
-          );
+          // Admins see everything; staff see only what their permissions grant.
+          // Settings has no page key in ADMIN_PAGES — there is no staff reason
+          // to edit the site's contact details and legal text — so it is
+          // effectively admin-only without needing a second flag.
+          const visible = group.items.filter((item) => canAccessPage(user, item.pageKey));
           if (visible.length === 0) return null;
 
           return (

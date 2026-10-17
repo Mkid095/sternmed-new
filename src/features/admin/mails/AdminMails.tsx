@@ -1,558 +1,296 @@
-import { useState, useEffect } from 'react'
-import { Plus, Mail, ExternalLink, Trash2, Copy, Check } from 'lucide-react'
-import { supabase } from '../../../config/supabase'
-import { ConfirmationModal, useConfirmationModal, useToastSuccess, useToastError } from '../../shared/ui'
-import { MAIL_APP_URL } from '../../../constants'
+/**
+ * Email alias administration.
+ *
+ * What changed
+ * ------------
+ * - **The page title is gone.** The layout header already reads "Mails", so the
+ *   page printed the same word twice, 40px apart.
+ * - **Palette and spacing now match the rest of the admin** (primary/slate,
+ *   `flex flex-col gap-4 pb-10`) instead of the old blue/gray `p-6` treatment.
+ * - **A search box**, because the alias list is only ever going to grow.
+ * - **The duplicated "Email Users" panel is gone.** Every row in it repeated an
+ *   alias that already appeared above with the same address and the same
+ *   "Access Mailbox" button.
+ * - **Loading and failure are distinguishable.** Both fetches used to log to
+ *   the console and render as though there were simply no aliases.
+ *
+ * The create flow is unchanged: same validation, same insert, same edge
+ * functions, same credentials panel. Password generation, the credentials
+ * email and the data fetching moved into `hooks/useEmailAliases.ts`.
+ *
+ * @module AdminMails
+ */
 
-interface EmailAlias {
-  id: string
-  alias_email: string
-  display_name: string
-  is_active: boolean
-  created_at: string
-}
-
-interface User {
-  id: string
-  email: string
-  email_alias_id?: string
-  role: string
-}
+import { useMemo, useState } from 'react';
+import { clsx } from 'clsx';
+import { Plus, Mail, Search, X, ExternalLink, AlertTriangle } from 'lucide-react';
+import {
+  useEmailAliases,
+  type AliasForm,
+  type AliasCredentials,
+  type EmailAlias,
+} from './hooks/useEmailAliases';
+import { AliasRow } from './components/AliasRow';
+import { CreateAliasModal } from './components/CreateAliasModal';
+import { AliasCredentialsModal } from './components/AliasCredentialsModal';
+import { ConfirmationModal, useConfirmationModal, useToastSuccess, useToastError } from '../../shared/ui';
+import { MAIL_APP_URL } from '../../../constants';
 
 export function AdminMails() {
-  const [aliases, setAliases] = useState<EmailAlias[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showCredentialsModal, setShowCredentialsModal] = useState(false)
-  const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string; name: string; recipientEmail: string } | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [newAlias, setNewAlias] = useState({ email: '', name: '', recipientEmail: '' })
-  const [creating, setCreating] = useState(false)
-  const [users, setUsers] = useState<User[]>([])
+  const {
+    aliases,
+    loading,
+    error,
+    userByAliasId,
+    createAlias,
+    deleteAlias,
+    setAliasActive,
+  } = useEmailAliases();
 
-  const { confirm, props } = useConfirmationModal()
-  const showSuccess = useToastSuccess()
-  const showError = useToastError()
+  const [search, setSearch] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState<AliasCredentials | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [form, setForm] = useState<AliasForm>({ email: '', name: '', recipientEmail: '' });
+  const [creating, setCreating] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  const fetchAliases = async () => {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('email_aliases')
-      .select('*')
-      .order('created_at', { ascending: false })
+  const { confirm, props } = useConfirmationModal();
+  const showSuccess = useToastSuccess();
+  const showError = useToastError();
 
-    if (error) {
-      console.error('Error fetching aliases:', error)
-    } else {
-      setAliases(data || [])
-    }
-    setLoading(false)
-  }
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return aliases;
+    return aliases.filter(
+      (a) =>
+        a.alias_email.toLowerCase().includes(q) ||
+        a.display_name.toLowerCase().includes(q),
+    );
+  }, [aliases, search]);
 
-  const fetchUsers = async () => {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, email, email_alias_id, role')
-      .eq('role', 'email_user')
+  const activeCount = aliases.filter((a) => a.is_active).length;
 
-    if (!error && data) {
-      setUsers(data as User[])
-    }
-  }
+  const closeCreate = () => {
+    setShowCreateModal(false);
+    setForm({ email: '', name: '', recipientEmail: '' });
+  };
 
-  useEffect(() => {
-    fetchAliases()
-    fetchUsers()
-  }, [])
-
-  const DOMAIN = '@sternmedafrika.com'
-
-  // Generate a random temporary password
-  const generateTemporaryPassword = () => {
-    const length = 12
-    const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*'
-    let password = ''
-    for (let i = 0; i < length; i++) {
-      password += charset.charAt(Math.floor(Math.random() * charset.length))
-    }
-    return password
-  }
-
-  const handleCreateAlias = async () => {
-    if (!newAlias.email || !newAlias.name || !newAlias.recipientEmail) {
-      showError('Please fill in all fields')
-      return
-    }
-
-    // Auto-append domain if not already present
-    let aliasEmail = newAlias.email
-    if (!aliasEmail.includes('@')) {
-      aliasEmail = aliasEmail + DOMAIN
-    }
-
-    setCreating(true)
-
+  const handleCreate = async () => {
+    setCreating(true);
     try {
-      // 1. Generate temporary password
-      const temporaryPassword = generateTemporaryPassword()
-
-      // 2. Insert alias first to get an ID
-      const { data: createdAlias, error: aliasError } = await supabase
-        .from('email_aliases')
-        .insert({
-          alias_email: aliasEmail,
-          display_name: newAlias.name,
-          is_active: true,
-        })
-        .select()
-        .single()
-
-      if (aliasError) throw aliasError
-
-      // 3. Call Edge Function to create Firebase user and Supabase record
-      // This runs server-side so the admin doesn't get signed out
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-      const edgeFunctionUrl = `${supabaseUrl}/functions/v1/create-email-user`
-
-      const edgeResponse = await fetch(edgeFunctionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseAnonKey}`,
-        },
-        body: JSON.stringify({
-          email: aliasEmail,
-          password: temporaryPassword,
-          displayName: newAlias.name,
-          aliasId: createdAlias.id,
-        }),
-      })
-
-      const edgeResult = await edgeResponse.json()
-
-      if (!edgeResponse.ok) {
-        // ROLLBACK: Delete the alias we just created
-        await supabase.from('email_aliases').delete().eq('id', createdAlias.id);
-        throw new Error(edgeResult.error || 'Failed to create email user')
-      }
-
-      // 3. Send credentials email to recipient (best effort, don't fail if email fails)
-      try {
-        const sendEmailUrl = `${supabaseUrl}/functions/v1/send-email`;
-        const emailHtml = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">Welcome to Sternmed Afrika Email</h2>
-            <p>Hello ${newAlias.name},</p>
-            <p>Your email alias has been created. Here are your login credentials:</p>
-            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <p><strong>Email:</strong> ${aliasEmail}</p>
-              <p><strong>Password:</strong> <code style="background: #fff; padding: 2px 6px; border: 1px solid #ddd; border-radius: 4px;">${temporaryPassword}</code></p>
-            </div>
-            <p>You can log in to your email at: <a href={MAIL_APP_URL} style={{ color: '#2563eb' }}>{MAIL_APP_URL}</a></p>
-            <p>For security reasons, we recommend changing your password after the first login.</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-            <p style="color: #666; font-size: 12px;">If you did not request this alias, please contact the administrator immediately.</p>
-          </div>
-        `;
-
-        await fetch(sendEmailUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            to: newAlias.recipientEmail,
-            subject: 'Your Sternmed Afrika Email Account',
-            html: emailHtml,
-            from: 'Sternmed Afrika <noreply@sternmedafrika.com>',
-          }),
-        });
-      } catch (emailError) {
-        console.error('Failed to send credentials email:', emailError);
-        // Continue anyway - we still show credentials modal
-      }
-
-      // 4. Store credentials to show in modal (preserve recipientEmail before resetting newAlias)
-      setCreatedCredentials({
-        email: aliasEmail,
-        password: temporaryPassword,
-        name: newAlias.name,
-        recipientEmail: newAlias.recipientEmail,
-      })
-
-      // Reset form
-      setNewAlias({ email: '', name: '', recipientEmail: '' })
-      setShowCreateModal(false)
-      setShowCredentialsModal(true)
-
-      // Refresh
-      fetchAliases()
-      fetchUsers()
-
-      showSuccess('Email alias created successfully!')
-    } catch (error: any) {
-      console.error('Error creating alias:', error)
-
-      // Handle specific errors
-      if (error.message?.includes('EMAIL_EXISTS')) {
-        showError('A user with this email already exists')
-      } else if (error.message?.includes('INVALID_EMAIL')) {
-        showError('Invalid email address format')
+      const credentials = await createAlias(form);
+      closeCreate();
+      setCreatedCredentials(credentials);
+      setShowCredentialsModal(true);
+      showSuccess('Email alias created');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not create the alias';
+      if (message.includes('EMAIL_EXISTS')) {
+        showError('A user with this email already exists');
+      } else if (message.includes('INVALID_EMAIL')) {
+        showError('That email address is not valid');
       } else {
-        showError(`Failed to create alias: ${error.message}`)
+        showError(message);
       }
     } finally {
-      setCreating(false)
+      setCreating(false);
     }
-  }
+  };
+
+  const handleToggleActive = async (alias: EmailAlias, isActive: boolean) => {
+    setBusyId(alias.id);
+    try {
+      await setAliasActive(alias.id, isActive);
+      showSuccess(isActive ? `${alias.alias_email} is receiving mail` : `${alias.alias_email} paused`);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Could not change the alias');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDelete = async (alias: EmailAlias) => {
+    const confirmed = await confirm({
+      title: 'Delete email alias',
+      message: `${alias.alias_email} will be deleted, along with the login account behind it. This cannot be undone. If you only want to stop mail arriving, pause it instead.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+    });
+    if (!confirmed) return;
+
+    setBusyId(alias.id);
+    try {
+      await deleteAlias(alias.id);
+      showSuccess('Alias deleted');
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Could not delete the alias');
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const copyCredentials = () => {
-    if (!createdCredentials) return
-
-    const text = `Email: ${createdCredentials.email}\nPassword: ${createdCredentials.password}\n\nLogin at: ${MAIL_APP_URL}\n\nThis account was created for: ${createdCredentials.name} (${createdCredentials.recipientEmail})`
-    navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-    showSuccess('Credentials copied to clipboard!')
-  }
-
-  const handleDeleteAlias = async (id: string) => {
-    const confirmed = await confirm({
-      title: 'Delete Email Alias',
-      message: 'Are you sure you want to delete this email alias? This will also delete the associated user account and credentials. This action cannot be undone.',
-      confirmText: 'Delete',
-      cancelText: 'Cancel'
-    })
-
-    if (!confirmed) return
-
-    try {
-      // Call edge function to delete alias and associated user
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      const edgeFunctionUrl = `${supabaseUrl}/functions/v1/delete-email-user`;
-
-      const response = await fetch(edgeFunctionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseAnonKey}`,
-        },
-        body: JSON.stringify({ aliasId: id }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to delete alias');
-      }
-
-      showSuccess('Alias and user deleted successfully');
-      fetchAliases();
-    } catch (error: any) {
-      console.error('Failed to delete alias:', error);
-      showError(`Failed to delete alias: ${error.message}`);
-    }
-  }
-
-  const openMailbox = (alias: EmailAlias) => {
-    // Open mail.sternmedafrika.com in new tab
-    window.open(MAIL_APP_URL, '_blank')
-  }
+    if (!createdCredentials) return;
+    const text = `Email: ${createdCredentials.email}\nPassword: ${createdCredentials.password}\n\nLogin at: ${MAIL_APP_URL}\n\nCreated for: ${createdCredentials.name} (${createdCredentials.recipientEmail})`;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    showSuccess('Credentials copied');
+  };
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Mails</h1>
-        <p className="text-gray-600 mt-1">Manage email aliases and access mailboxes</p>
-      </div>
+    <div className="flex flex-col gap-4 pb-10">
+      {/* No page title — the layout header bar already reads "Mails". */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-slate-500">
+          {loading
+            ? 'Loading aliases…'
+            : aliases.length === 0
+              ? 'No aliases yet'
+              : `${activeCount} of ${aliases.length} receiving mail`}
+        </p>
 
-      {/* Quick Actions */}
-      <div className="mb-6 flex flex-wrap gap-4">
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Create Email Alias
-        </button>
-        <a
-          href={MAIL_APP_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          <ExternalLink className="w-4 h-4" />
-          Open Email Platform
-        </a>
-      </div>
-
-      {/* Email Aliases */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="font-semibold text-gray-900">Email Aliases</h2>
+        <div className="flex items-center gap-2">
+          <a
+            href={MAIL_APP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+          >
+            <ExternalLink size={14} aria-hidden="true" />
+            Open platform
+          </a>
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            className="hidden items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 font-medium text-white shadow-sm transition-colors hover:bg-primary-700 sm:flex"
+          >
+            <Plus size={18} aria-hidden="true" />
+            New alias
+          </button>
         </div>
+      </div>
 
-        {loading ? (
-          <div className="p-12 text-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mx-auto mb-4" />
-            <p className="text-gray-500">Loading...</p>
-          </div>
-        ) : aliases.length === 0 ? (
-          <div className="p-12 text-center">
-            <Mail className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 mb-4">No email aliases yet</p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Create your first alias →
-            </button>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {aliases.map((alias) => {
-              const associatedUser = users.find(u => u.email_alias_id === alias.id)
+      {error && (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+        >
+          <AlertTriangle size={16} aria-hidden="true" className="mt-0.5 flex-shrink-0" />
+          Could not load the aliases — {error}
+        </p>
+      )}
 
-              return (
-                <div key={alias.id} className="p-6 flex items-center justify-between hover:bg-gray-50">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                      <Mail className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">{alias.alias_email}</h3>
-                      <p className="text-sm text-gray-500">{alias.display_name}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          alias.is_active
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}>
-                          {alias.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                        {associatedUser && (
-                          <span className="text-xs text-gray-500">
-                            User: {associatedUser.email}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => openMailbox(alias)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="Open mailbox"
-                    >
-                      <ExternalLink className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteAlias(alias.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete alias"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+      {/* Search */}
+      <div className="relative">
+        <Search
+          size={15}
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+        />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by address or name"
+          aria-label="Search email aliases"
+          className={clsx(
+            'w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 text-sm text-slate-900',
+            'placeholder:text-slate-400 transition-colors',
+            'hover:border-slate-300 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/25',
+            search ? 'pr-9' : 'pr-3',
+          )}
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            aria-label="Clear search"
+            className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X size={14} aria-hidden="true" />
+          </button>
         )}
       </div>
 
-      {/* Users with Email Access */}
-      {!loading && users.length > 0 && (
-        <div className="mt-6 bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900">Email Users</h2>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {users.map((user) => (
-              <div key={user.id} className="p-6 flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-gray-900">{user.email}</p>
-                  <p className="text-sm text-gray-500">Email User</p>
-                </div>
-                <button
-                  onClick={() => window.open(MAIL_APP_URL, '_blank')}
-                  className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                >
-                  Access Mailbox →
-                </button>
-              </div>
-            ))}
-          </div>
+      {/* Alias list */}
+      {loading ? (
+        <div className="flex h-64 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-primary-600" />
         </div>
+      ) : aliases.length === 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white px-6 py-14 text-center">
+          <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-slate-100">
+            <Mail size={28} className="text-slate-300" aria-hidden="true" />
+          </div>
+          <h2 className="mb-2 text-base font-semibold text-slate-900">No email aliases yet</h2>
+          <p className="mx-auto mb-5 max-w-sm text-sm text-slate-500">
+            Create an alias to give someone their own address and login for the mail platform.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 font-medium text-white transition-colors hover:bg-primary-700"
+          >
+            <Plus size={18} aria-hidden="true" />
+            Create your first alias
+          </button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white px-6 py-14 text-center">
+          <p className="text-sm font-medium text-slate-700">No alias matches “{search}”</p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+          {filtered.map((alias) => (
+            <AliasRow
+              key={alias.id}
+              alias={alias}
+              linkedUser={userByAliasId.get(alias.id)}
+              isBusy={busyId === alias.id}
+              onToggleActive={handleToggleActive}
+              onOpenMailbox={() => window.open(MAIL_APP_URL, '_blank', 'noopener')}
+              onDelete={handleDelete}
+            />
+          ))}
+        </ul>
       )}
 
-      {/* Create Alias Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">Create Email Alias</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Alias Name
-                </label>
-                <input
-                  type="text"
-                  value={newAlias.email}
-                  onChange={(e) => setNewAlias({ ...newAlias, email: e.target.value.replace(/@.*$/, '') })}
-                  placeholder="kennedy"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Will become: <span className="font-mono text-blue-600">
-                    {newAlias.email || 'alias'}@sternmedafrika.com
-                  </span>
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Display Name
-                </label>
-                <input
-                  type="text"
-                  value={newAlias.name}
-                  onChange={(e) => setNewAlias({ ...newAlias, name: e.target.value })}
-                  placeholder="Kennedy Omondi"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Recipient Email (for credentials)
-                </label>
-                <input
-                  type="email"
-                  value={newAlias.recipientEmail}
-                  onChange={(e) => setNewAlias({ ...newAlias, recipientEmail: e.target.value })}
-                  placeholder="personal@example.com"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <p className="text-xs text-gray-500 mt-1">Login credentials will be sent here (for your reference)</p>
-              </div>
-            </div>
-            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowCreateModal(false)
-                  setNewAlias({ email: '', name: '', recipientEmail: '' })
-                }}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateAlias}
-                disabled={creating}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {creating ? 'Creating...' : 'Create Alias'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <CreateAliasModal
+          alias={form}
+          onChange={setForm}
+          onSubmit={handleCreate}
+          onClose={closeCreate}
+          isCreating={creating}
+        />
       )}
 
-      {/* Credentials Modal */}
       {showCredentialsModal && createdCredentials && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200 bg-green-50 rounded-t-lg">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-                  <Check className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Email Alias Created!</h2>
-                  <p className="text-sm text-gray-600">Share these credentials with the user</p>
-                </div>
-              </div>
-            </div>
-            <div className="p-6 max-h-[70vh] overflow-y-auto">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                <h3 className="font-semibold text-blue-900 mb-2">User Information</h3>
-                <p className="text-sm text-blue-800">
-                  <strong>Name:</strong> {createdCredentials.name}
-                </p>
-                <p className="text-sm text-blue-800">
-                  <strong>Recipient Email:</strong> {createdCredentials?.recipientEmail}
-                </p>
-              </div>
-
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
-                <h3 className="font-semibold text-gray-900 mb-3">Login Credentials</h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs text-gray-500 uppercase tracking-wide">Email</label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <code className="flex-1 bg-white px-3 py-2 rounded border border-gray-300 text-sm font-mono">
-                        {createdCredentials.email}
-                      </code>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 uppercase tracking-wide">Temporary Password</label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <code className="flex-1 bg-white px-3 py-2 rounded border border-gray-300 text-sm font-mono">
-                        {createdCredentials.password}
-                      </code>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-                <p className="text-sm text-amber-800">
-                  <strong>Important:</strong> The user should change their password after first login at{' '}
-                  <a href={MAIL_APP_URL} target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
-                    mail.sternmedafrika.com
-                  </a>
-                </p>
-              </div>
-            </div>
-            <div className="p-6 border-t border-gray-200 flex gap-3">
-              <button
-                onClick={() => {
-                  setShowCredentialsModal(false)
-                  setCreatedCredentials(null)
-                  setNewAlias({ email: '', name: '', recipientEmail: '' })
-                }}
-                className="flex-1 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                Close
-              </button>
-              <button
-                onClick={copyCredentials}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-              >
-                {copied ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    Copy Credentials
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        <AliasCredentialsModal
+          credentials={createdCredentials}
+          hasCopied={copied}
+          onCopy={copyCredentials}
+          onClose={() => {
+            setShowCredentialsModal(false);
+            setCreatedCredentials(null);
+          }}
+        />
       )}
+
+      {/* Mobile FAB */}
+      <button
+        type="button"
+        onClick={() => setShowCreateModal(true)}
+        aria-label="Create email alias"
+        className="fixed bottom-20 right-4 z-30 grid h-14 w-14 place-items-center rounded-full bg-primary-600 text-white shadow-lg transition-all active:scale-95 sm:hidden"
+      >
+        <Plus size={24} aria-hidden="true" />
+      </button>
 
       <ConfirmationModal {...props} />
     </div>
-  )
+  );
 }

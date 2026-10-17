@@ -23,7 +23,7 @@ import { AdminDashboard } from './features/admin/dashboard';
 import { AdminProducts } from './features/admin/products';
 import { AdminCategories } from './features/admin/categories';
 import { AdminLandingConfig } from './features/admin/landing';
-import { AdminBanners } from './features/admin/banners';
+import AdminBanners from './features/admin/banners/AdminBanners';
 import { AdminMails } from './features/admin/mails';
 import { AdminUsers } from './features/admin/users';
 import { AdminSettings } from './features/admin/settings';
@@ -100,29 +100,94 @@ export default function App() {
             {/* Admin Login Route - Always accessible */}
             <Route path="/login" element={<AdminLogin />} />
 
-            {/* Admin Dashboard Routes - Protected by AdminLayout */}
+            {/*
+              Admin routes.
+
+              Every page is wrapped in `RoleGuard` with the same page key the
+              sidebar hides it by and the user form grants it under — one list
+              (`features/admin/permissions`), so the menu, the toggle and the
+              route can never disagree.
+
+              This is what makes page access real rather than cosmetic: without
+              it, hiding a nav item still leaves the URL working, and a staff
+              member who types /admin/settings simply gets the page.
+
+              `settings` is not in ADMIN_PAGES, so no staff checkbox can grant
+              it — which makes it admin-only here without a second rule.
+            */}
             <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<AdminDashboard />} />
-              <Route path="products" element={<AdminProducts />} />
-              <Route path="categories" element={<AdminCategories />} />
-              <Route path="landing-config" element={<AdminLandingConfig />} />
-              <Route path="banners" element={<AdminBanners />} />
-              <Route path="mails" element={
-                <RoleGuard allowedRoles={['admin']}>
-                  <AdminMails />
-                </RoleGuard>
-              } />
-              <Route path="users" element={
-                <RoleGuard allowedRoles={['admin']}>
-                  <AdminUsers />
-                </RoleGuard>
-              } />
-              <Route path="settings" element={
-                <RoleGuard allowedRoles={['admin']}>
-                  <AdminSettings />
-                </RoleGuard>
-              } />
-              <Route path="orders" element={<AdminOrders />} />
+              <Route
+                index
+                element={
+                  <RoleGuard requiredPermission="dashboard">
+                    <AdminDashboard />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="products"
+                element={
+                  <RoleGuard requiredPermission="products">
+                    <AdminProducts />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="categories"
+                element={
+                  <RoleGuard requiredPermission="categories">
+                    <AdminCategories />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="landing-config"
+                element={
+                  <RoleGuard requiredPermission="landing-config">
+                    <AdminLandingConfig />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="banners"
+                element={
+                  <RoleGuard requiredPermission="banners">
+                    <AdminBanners />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="orders"
+                element={
+                  <RoleGuard requiredPermission="orders">
+                    <AdminOrders />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="mails"
+                element={
+                  <RoleGuard requiredPermission="mails">
+                    <AdminMails />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="users"
+                element={
+                  <RoleGuard requiredPermission="users">
+                    <AdminUsers />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="settings"
+                element={
+                  <RoleGuard requiredPermission="settings">
+                    <AdminSettings />
+                  </RoleGuard>
+                }
+              />
             </Route>
 
             {/* PUBLIC ROUTES (Subject to development mode check) */}

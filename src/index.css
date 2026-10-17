@@ -278,14 +278,173 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* Better touch target sizes */
+/* Touch targets: 44px is the comfortable minimum for a finger.
+ *
+ * This used to be a blanket `button, a { min-height: 44px; min-width: 44px }`.
+ * That silently broke every small icon button in the admin: `min-height` beats
+ * `height` at ANY specificity, so `class="h-8 w-8"` still rendered 44×44. The
+ * cards were laid out for 32px controls and every action row came out loose —
+ * which is what the "the icon is misplaced" reports actually were.
+ *
+ * So: text buttons still get a real 44px box, while a button that explicitly
+ * asks to be small keeps the box it asked for and grows an INVISIBLE hit area
+ * out to 44px instead. The target stays compliant; the layout stops being lied
+ * to.
+ */
 button,
 a {
   min-height: 44px;
-  min-width: 44px;
+}
+
+/* Buttons that name their own size of 32px or smaller. Both properties have to
+ * be cleared — `min-width` is what pushed icon buttons square. */
+button.h-6,
+button.h-7,
+button.h-8,
+button.h-9,
+button.w-6,
+button.w-7,
+button.w-8,
+button.w-9,
+button.size-6,
+button.size-7,
+button.size-8,
+button.size-9,
+a.h-6,
+a.h-7,
+a.h-8,
+a.h-9,
+a.w-6,
+a.w-7,
+a.w-8,
+a.w-9,
+a.size-6,
+a.size-7,
+a.size-8,
+a.size-9 {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ...and the hit-area expansion. A pseudo-element rather than padding, so the
+ * extra reach is invisible and never reflows the row. */
+button.h-6::after,
+button.h-7::after,
+button.h-8::after,
+button.h-9::after,
+button.w-6::after,
+button.w-7::after,
+button.w-8::after,
+button.w-9::after,
+button.size-6::after,
+button.size-7::after,
+button.size-8::after,
+button.size-9::after,
+a.h-6::after,
+a.h-7::after,
+a.h-8::after,
+a.h-9::after,
+a.w-6::after,
+a.w-7::after,
+a.w-8::after,
+a.w-9::after,
+a.size-6::after,
+a.size-7::after,
+a.size-8::after,
+a.size-9::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  translate: -50% -50%;
+  border-radius: inherit;
 }
 
 /* Remove tap highlight on mobile */
 * {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* ------------------------------------------------------------------ *
+ * Legal document content
+ * ------------------------------------------------------------------ *
+ * The legal pages render admin-authored HTML through `sanitizeHtml`, which
+ * keeps headings, paragraphs and lists but strips every class. They used to
+ * carry `prose prose-slate`, which did nothing: @tailwindcss/typography is not
+ * installed here, so those classes resolved to no rules at all — and Tailwind's
+ * preflight then flattened every heading to body size and removed every list
+ * marker, so the policies rendered as one undifferentiated wall of text.
+ *
+ * These rules replace the missing plugin for this one job. They are scoped to
+ * `.legal-content` so they cannot leak into the rest of the site, and they use
+ * `@layer components` so plain utility classes on the same element still win.
+ */
+@layer components {
+  .legal-content {
+    @apply text-slate-600;
+    font-size: 0.9375rem;
+    line-height: 1.7;
+  }
+
+  /* The page already renders an <h1>, so content starts at h2. */
+  .legal-content h2 {
+    @apply mt-2 mb-4 text-xl font-semibold text-slate-900;
+  }
+
+  .legal-content h3 {
+    @apply mt-8 mb-3 text-base font-semibold text-slate-900;
+  }
+
+  .legal-content p {
+    @apply mb-4;
+  }
+
+  /* Preflight strips list markers and indentation; put both back. */
+  .legal-content ul,
+  .legal-content ol {
+    @apply mb-4 pl-5;
+    list-style-position: outside;
+  }
+
+  .legal-content ul {
+    list-style-type: disc;
+  }
+
+  .legal-content ol {
+    list-style-type: decimal;
+  }
+
+  .legal-content li {
+    @apply mb-1.5;
+  }
+
+  /* Nested lists, if an admin uses them. */
+  .legal-content ul ul {
+    @apply mt-1.5 mb-1.5 pl-4;
+    list-style-type: circle;
+  }
+
+  .legal-content strong {
+    @apply font-semibold text-slate-800;
+  }
+
+  .legal-content a {
+    @apply font-medium text-primary-600 underline underline-offset-2;
+  }
+
+  .legal-content a:hover {
+    @apply text-primary-700;
+  }
+
+  .legal-content blockquote {
+    @apply my-4 border-l-4 border-slate-200 pl-4 italic text-slate-500;
+  }
+
+  /* A rule between sections, for policies that use <hr>. */
+  .legal-content hr {
+    @apply my-8 border-slate-200;
+  }
 }

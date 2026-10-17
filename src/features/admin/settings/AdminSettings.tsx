@@ -1,43 +1,70 @@
 /**
- * Admin Settings Page
+ * Admin Settings page.
  *
- * Main site settings management interface for administrators.
- * Features include:
- * - General settings (phone, email, address, about)
- * - Home page prominence (featured products, category order)
- * - Legal pages (privacy policy, terms & conditions)
- * - Site status (development mode toggle)
- * - Tab-based navigation
+ * Four tabs, each owning a different kind of fact:
+ *
+ * | Tab          | Owns                                                        |
+ * |--------------|-------------------------------------------------------------|
+ * | General      | Contact details and the footer blurb                        |
+ * | Home Page    | Featured product count, category display order              |
+ * | Legal Pages  | Privacy policy and terms text                               |
+ * | Site Status  | Development mode — saved the moment it is flipped, not here |
+ *
+ * The home page *layout* is not in that list. It belongs to the Landing page
+ * (`../../landing/hooks/useHomeSections`), which is where the blocks, their
+ * order and their switches live. Settings used to render a second copy of that
+ * list; two writers for one fact is what made a change made on one page appear
+ * to do nothing on the other. There is now a pointer instead of a duplicate.
+ *
+ * Design notes
+ * ------------
+ * This page was previously styled differently from the rest of the admin app —
+ * gradient tiles, a 16-button gradient call to action, a status card that
+ * restated the banner above it, and blue where the rest of the app is
+ * `primary`. It is now flat white cards on slate, matching every other admin
+ * screen, and uses the shared `Toggle` for the one live switch.
  *
  * @module AdminSettings
  */
 
-import React, { useEffect, useState } from 'react';
-import { Settings, Save, Star, Globe, Lock, Unlock, AlertTriangle, LayoutTemplate, Package, GripVertical, Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
-import { Input } from '../../shared/ui';
-import { Button } from '../../shared/ui';
-import { useSettingsManager } from './hooks';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Settings,
+  Save,
+  Star,
+  Globe,
+  AlertTriangle,
+  LayoutTemplate,
+  Package,
+  GripVertical,
+  ExternalLink,
+  Mail,
+  MapPin,
+  FileText,
+  Power,
+} from 'lucide-react';
+import { clsx } from 'clsx';
+import { Input, Textarea, Toggle } from '../../shared/ui';
+import { useSettingsManager, type SettingsTab } from './hooks';
 import { api } from '../../../services/api';
-import { setDevelopmentMode as setDevMode, isDevelopmentMode as checkDevMode } from '../../../services/siteSettings.service';
-import { Category, SiteSettings, HomepageSection, DEFAULT_HOMEPAGE_SECTIONS } from '../../../types';
+import {
+  setDevelopmentMode as setDevMode,
+  isDevelopmentMode as checkDevMode,
+} from '../../../services/siteSettings.service';
+import { Category, SiteSettings } from '../../../types';
 import { useToastSuccess, useToastError } from '../../shared/ui';
 
-/**
- * Admin Settings Page Component
- *
- * Provides site settings management:
- * - General settings (contact info, about text)
- * - Home page prominence (featured section, category order)
- * - Legal pages (privacy policy, terms & conditions)
- * - Site status (development mode toggle)
- * - Tab-based navigation between sections
- *
- * @example
- * <Route path="/admin/settings" element={<AdminSettings />} />
- */
-export default function AdminSettings() {
-  // ============ State Management ============
+/* ------------------------------------------------------------------ *
+ * Shared field styling
+ * ------------------------------------------------------------------ */
 
+const LABEL = 'mb-1.5 block text-sm font-medium text-slate-700';
+
+/* ------------------------------------------------------------------ *
+ * Page
+ * ------------------------------------------------------------------ */
+
+export default function AdminSettings() {
   const {
     settings,
     setSettings,
@@ -47,6 +74,8 @@ export default function AdminSettings() {
     setActiveTab,
     handleChange,
     handleSave,
+    isDirty,
+    discardChanges,
   } = useSettingsManager();
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -54,496 +83,365 @@ export default function AdminSettings() {
   const [devModeEnabled, setDevModeEnabled] = useState<boolean | null>(null);
   const [togglingMode, setTogglingMode] = useState(false);
 
-  const showSuccess = useToastSuccess();
-  const showError = useToastError();
-
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const cats = await api.getCategories();
-        setCategories(cats.filter((c) => c.showOnHome));
-      } catch (error) {
-        console.error('Failed to fetch categories', error);
-      }
-    };
-    fetchCategories();
-
-    const fetchDevMode = async () => {
-      try {
-        const devMode = await checkDevMode();
-        setDevModeEnabled(devMode);
-      } catch (error) {
-        console.error('Failed to fetch development mode:', error);
-        setDevModeEnabled(false);
-      }
-    };
-    fetchDevMode();
+    api
+      .getCategories()
+      .then((cats) => setCategories(cats.filter((c) => c.showOnHome)))
+      .catch((error) => console.error('Failed to fetch categories', error));
   }, []);
 
-  // ============ Loading State ============
+  useEffect(() => {
+    checkDevMode()
+      .then(setDevModeEnabled)
+      .catch((error) => {
+        console.error('Failed to fetch development mode:', error);
+        setDevModeEnabled(false);
+      });
+  }, []);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-slate-500">Loading settings...</div>
+      <div className="flex h-64 items-center justify-center text-sm text-slate-500">
+        Loading settings…
       </div>
     );
   }
 
-  // ============ Main Layout ============
-
   return (
-    <div className="max-w-4xl space-y-6">
-      {/* Header */}
-      <SettingsHeader />
+    <div className="mx-auto max-w-4xl space-y-6">
+      <header>
+        <h1 className="flex items-center gap-2.5 text-xl font-bold text-slate-900">
+          <Settings size={20} className="text-slate-400" aria-hidden="true" />
+          Site Settings
+        </h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Contact details, home page behaviour and legal text. Changes are saved
+          when you press Save.
+        </p>
+      </header>
 
-      {/* Tabs */}
-      <SettingsTabs
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-      />
+      <SettingsTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-      {/* Settings Form */}
-      <SettingsForm
-        settings={settings}
-        activeTab={activeTab}
-        categories={categories}
-        draggedCategory={draggedCategory}
-        setDraggedCategory={setDraggedCategory}
-        onChange={handleChange}
-        onSave={handleSave}
-        saving={saving}
-        isDevelopmentMode={devModeEnabled}
-        setIsDevelopmentMode={setDevModeEnabled}
-        togglingMode={togglingMode}
-        setTogglingMode={setTogglingMode}
-        setSettings={setSettings}
-      />
+      {/*
+        The tabpanel wraps the real content rather than living inside
+        SettingsTabs — `aria-controls` on the tab has to point at the thing the
+        tab actually controls, or a screen reader announces a panel that is not
+        there.
+      */}
+      <div
+        id={`settings-panel-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`settings-tab-${activeTab}`}
+        tabIndex={-1}
+        className="pt-5 focus-visible:outline-none"
+      >
+      {/*
+        `site-status` sits outside the form: it flips a live flag that takes
+        effect the moment it is toggled, so it must not queue behind Save.
+      */}
+      {activeTab === 'site-status' ? (
+        <SiteStatusPanel
+          isDevelopmentMode={devModeEnabled}
+          onToggle={setDevModeEnabled}
+          togglingMode={togglingMode}
+          setTogglingMode={setTogglingMode}
+        />
+      ) : (
+        <form onSubmit={handleSave} className="space-y-5">
+          {activeTab === 'general' && (
+            <GeneralSettings settings={settings} onChange={handleChange} />
+          )}
+
+          {activeTab === 'homepage' && (
+            <HomePageSettings
+              settings={settings}
+              categories={categories}
+              draggedCategory={draggedCategory}
+              setDraggedCategory={setDraggedCategory}
+              onChange={handleChange}
+              setSettings={setSettings}
+            />
+          )}
+
+          {activeTab === 'legal' && <LegalSettings settings={settings} onChange={handleChange} />}
+
+          {/*
+            The bar is only there when there is something to save. A permanently
+            visible Save button reads as equally urgent whether or not anything
+            has changed, and there is no way to tell whether your last edit
+            landed.
+          */}
+          <div
+            className={clsx(
+              // Clears the mobile bottom nav (65px) so the bar is never parked
+              // underneath it; on sm up there is no nav and it sits near the edge.
+              'sticky bottom-[5.5rem] z-20 flex flex-col gap-3 rounded-xl sm:bottom-4',
+              'sm:flex-row sm:items-center sm:justify-between sm:gap-4',
+              'border border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur',
+              'transition-opacity duration-150',
+              isDirty ? 'opacity-100' : 'pointer-events-none opacity-0',
+            )}
+          >
+            <p className="text-sm text-slate-600">You have unsaved changes.</p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={discardChanges}
+                disabled={saving}
+                className="flex-1 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-50 sm:flex-none"
+              >
+                Discard
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
+              >
+                <Save size={15} aria-hidden="true" />
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+      </div>
     </div>
   );
 }
 
-/**
- * Settings page header
- */
-function SettingsHeader() {
-  return (
-    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-      <h2 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
-        <Settings size={20} className="sm:w-6 sm:h-6" />
-        Site Settings
-      </h2>
-    </div>
-  );
-}
+/* ------------------------------------------------------------------ *
+ * Tabs
+ * ------------------------------------------------------------------ */
 
-/**
- * Settings tab navigation
- */
+const TABS: { id: SettingsTab; label: string; description: string }[] = [
+  {
+    id: 'general',
+    label: 'General',
+    description: 'How customers reach you, and what the footer says about you.',
+  },
+  {
+    id: 'homepage',
+    label: 'Home Page',
+    description: 'How many featured products show, and the order of the categories.',
+  },
+  {
+    id: 'legal',
+    label: 'Legal Pages',
+    description: 'The text behind the Privacy Policy and Terms links in the footer.',
+  },
+  {
+    id: 'site-status',
+    label: 'Site Status',
+    description: 'Take the public site offline while you work, or put it back live.',
+  },
+];
+
 interface SettingsTabsProps {
-  activeTab: 'general' | 'homepage' | 'legal' | 'site-status';
-  onTabChange: (tab: 'general' | 'homepage' | 'legal' | 'site-status') => void;
+  activeTab: SettingsTab;
+  onTabChange: (tab: SettingsTab) => void;
 }
 
 function SettingsTabs({ activeTab, onTabChange }: SettingsTabsProps) {
-  return (
-    <div className="border-b border-slate-200 overflow-x-auto">
-      <nav className="flex gap-4 sm:gap-6 min-w-max">
-        <TabButton
-          tab="general"
-          active={activeTab === 'general'}
-          onClick={() => onTabChange('general')}
-        >
-          General
-        </TabButton>
-        <TabButton
-          tab="homepage"
-          active={activeTab === 'homepage'}
-          onClick={() => onTabChange('homepage')}
-        >
-          Home Page
-        </TabButton>
-        <TabButton
-          tab="legal"
-          active={activeTab === 'legal'}
-          onClick={() => onTabChange('legal')}
-        >
-          Legal Pages
-        </TabButton>
-        <TabButton
-          tab="site-status"
-          active={activeTab === 'site-status'}
-          onClick={() => onTabChange('site-status')}
-        >
-          Site Status
-        </TabButton>
-      </nav>
-    </div>
-  );
-}
+  // Arrow-key movement is what the tablist pattern requires, and it is what a
+  // keyboard user expects once the control announces itself as tabs.
+  const listRef = useRef<HTMLDivElement>(null);
+  const active = TABS.find((t) => t.id === activeTab) ?? TABS[0];
 
-/**
- * Individual tab button
- */
-interface TabButtonProps {
-  tab: string;
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const delta = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (delta === 0) return;
 
-function TabButton({ tab, active, onClick, children }: TabButtonProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={`pb-3 px-1 border-b-2 font-medium text-sm transition-colors ${
-        active
-          ? 'border-blue-600 text-blue-600'
-          : 'border-transparent text-slate-500 hover:text-slate-700'
-      }`}
-      aria-selected={active}
-      role="tab"
-    >
-      {children}
-    </button>
-  );
-}
-
-/**
- * Settings form with tab content
- */
-interface SettingsFormProps {
-  settings: Partial<SiteSettings>;
-  activeTab: 'general' | 'homepage' | 'legal' | 'site-status';
-  categories: Category[];
-  draggedCategory: string | null;
-  setDraggedCategory: (id: string | null) => void;
-  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-  onSave: (e: React.FormEvent) => Promise<void>;
-  saving: boolean;
-  isDevelopmentMode: boolean | null;
-  setIsDevelopmentMode: (value: boolean) => void;
-  togglingMode: boolean;
-  setTogglingMode: (value: boolean) => void;
-  setSettings: React.Dispatch<React.SetStateAction<Partial<SiteSettings>>>;
-}
-
-function SettingsForm({
-  settings,
-  activeTab,
-  categories,
-  draggedCategory,
-  setDraggedCategory,
-  onChange,
-  onSave,
-  saving,
-  isDevelopmentMode,
-  setIsDevelopmentMode,
-  togglingMode,
-  setTogglingMode,
-  setSettings,
-}: SettingsFormProps) {
-  const showSuccess = useToastSuccess();
-  const showError = useToastError();
-
-  const handleToggleDevMode = async () => {
-    setTogglingMode(true);
-    try {
-      const newMode = !isDevelopmentMode;
-      await setDevMode(newMode);
-      setIsDevelopmentMode(newMode);
-      showSuccess(`Website is now ${newMode ? 'in development mode' : 'live'}`);
-    } catch (error) {
-      console.error('Failed to toggle development mode:', error);
-      showError('Failed to update site status. Please try again.');
-    } finally {
-      setTogglingMode(false);
-    }
+    e.preventDefault();
+    const index = TABS.findIndex((t) => t.id === activeTab);
+    const next = TABS[(index + delta + TABS.length) % TABS.length];
+    onTabChange(next.id);
+    listRef.current
+      ?.querySelector<HTMLButtonElement>(`#settings-tab-${next.id}`)
+      ?.focus();
   };
 
   return (
-    <form onSubmit={onSave}>
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden p-4 sm:p-6">
-        {activeTab === 'site-status' ? (
-          <SiteStatusSettings
-            isDevelopmentMode={isDevelopmentMode}
-            onToggle={handleToggleDevMode}
-            togglingMode={togglingMode}
-          />
-        ) : activeTab === 'general' ? (
-          <GeneralSettings settings={settings} onChange={onChange} />
-        ) : activeTab === 'homepage' ? (
-          <HomePageSettings
-            settings={settings}
-            categories={categories}
-            draggedCategory={draggedCategory}
-            setDraggedCategory={setDraggedCategory}
-            onChange={onChange}
-            setSettings={setSettings}
-          />
-        ) : (
-          <LegalSettings settings={settings} onChange={onChange} />
-        )}
-
-        {/* Save Button - Hidden on site-status tab since it has its own controls */}
-        {activeTab !== 'site-status' && (
-          <div className="pt-4 border-t border-slate-200 flex justify-end">
-            <Button type="submit" loading={saving} size="sm">
-              <Save size={16} />
-              {saving ? 'Saving...' : 'Save Settings'}
-            </Button>
-          </div>
-        )}
-      </div>
-    </form>
-  );
-}
-
-/**
- * Site Status settings - Development mode toggle
- */
-interface SiteStatusSettingsProps {
-  isDevelopmentMode: boolean | null;
-  onToggle: () => void;
-  togglingMode: boolean;
-}
-
-function SiteStatusSettings({ isDevelopmentMode, onToggle, togglingMode }: SiteStatusSettingsProps) {
-  return (
-    <div className="space-y-6">
-      {/* Status Indicator */}
-      <div className={`p-6 rounded-xl border-2 ${
-        isDevelopmentMode
-          ? 'bg-amber-50 border-amber-300'
-          : 'bg-green-50 border-green-300'
-      }`}>
-        <div className="flex items-start gap-4">
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-            isDevelopmentMode ? 'bg-amber-200' : 'bg-green-200'
-          }`}>
-            {isDevelopmentMode ? (
-              <AlertTriangle className="w-6 h-6 text-amber-700" />
-            ) : (
-              <Globe className="w-6 h-6 text-green-700" />
-            )}
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-slate-900 mb-1">
-              {isDevelopmentMode ? 'Website Under Development' : 'Website Live'}
-            </h3>
-            <p className="text-sm text-slate-600">
-              {isDevelopmentMode
-                ? 'Visitors will see the "Under Development" page. Admin access remains available.'
-                : 'Website is visible to all visitors. All pages are accessible.'
-              }
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Current Mode Details */}
-      <div className="bg-slate-50 rounded-xl border border-slate-200 p-6">
-        <h4 className="font-semibold text-slate-900 mb-4">Current Mode</h4>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-600">Status</span>
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-              isDevelopmentMode
-                ? 'bg-amber-100 text-amber-700'
-                : 'bg-green-100 text-green-700'
-            }`}>
-              {isDevelopmentMode ? 'DEVELOPMENT' : 'LIVE'}
-            </span>
-          </div>
-
-          {isDevelopmentMode && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-600">Public Access</span>
-              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-200 text-slate-700">
-                RESTRICTED
-              </span>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-600">Admin Portal</span>
-            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
-              AVAILABLE
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Toggle Control - Prominent Button Design */}
-      <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border-2 border-slate-200 p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg ${
-              isDevelopmentMode ? 'bg-gradient-to-br from-amber-400 to-amber-600' : 'bg-gradient-to-br from-green-400 to-green-600'
-            }`}>
-              {isDevelopmentMode ? (
-                <Lock className="w-8 h-8 text-white" />
-              ) : (
-                <Unlock className="w-8 h-8 text-white" />
+    <div>
+      <div
+        ref={listRef}
+        role="tablist"
+        aria-label="Settings sections"
+        onKeyDown={onKeyDown}
+        // The strip scrolls sideways on narrow screens. Its scrollbar is hidden
+        // because a visible one under the tabs reads as page content.
+        className="flex gap-1 overflow-x-auto border-b border-slate-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {TABS.map((tab) => {
+          const selected = tab.id === activeTab;
+          return (
+            <button
+              key={tab.id}
+              id={`settings-tab-${tab.id}`}
+              role="tab"
+              type="button"
+              aria-selected={selected}
+              aria-controls={`settings-panel-${activeTab}`}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => onTabChange(tab.id)}
+              className={clsx(
+                'shrink-0 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors',
+                selected
+                  ? 'border-primary-600 text-primary-700'
+                  : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700',
               )}
-            </div>
-            <div>
-              <h4 className="text-lg font-bold text-slate-900 mb-1">
-                {isDevelopmentMode ? 'Switch to Live Mode' : 'Switch to Development Mode'}
-              </h4>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                {isDevelopmentMode
-                  ? 'Make your website publicly accessible to all visitors'
-                  : 'Show the "Under Development" page to visitors while you work'
-                }
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onToggle}
-            disabled={togglingMode}
-            className={`
-              relative px-8 py-4 rounded-xl font-bold text-base shadow-lg
-              transition-all duration-200 transform active:scale-95
-              ${togglingMode ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-xl hover:-translate-y-0.5'}
-              ${isDevelopmentMode
-                ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
-                : 'bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700'
-              }
-            `}
-          >
-            {togglingMode ? (
-              <span className="flex items-center gap-2">
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Switching...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                {isDevelopmentMode ? (
-                  <>
-                    <Globe className="w-5 h-5" />
-                    Go Live
-                  </>
-                ) : (
-                  <>
-                    <Lock className="w-5 h-5" />
-                    Enable Dev Mode
-                  </>
-                )}
-              </span>
-            )}
-          </button>
-        </div>
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Warning */}
-      {isDevelopmentMode && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-blue-800">
-              <p className="font-medium mb-1">Development Mode Active</p>
-              <p>
-                While in development mode, visitors will see the "Website Under Development" page.
-                Admins can still access the portal at{' '}
-                <a href="/login" className="underline hover:text-blue-900">
-                  /login
-                </a>.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Each tab explains itself, so the panel below is not a bare list of fields. */}
+      <p className="pt-5 text-sm text-slate-500">{active.description}</p>
     </div>
   );
 }
 
 /**
- * General settings form fields
+ * A titled group of fields. Used instead of free-floating labels so each tab
+ * reads as a short list of named sections rather than one long wall of inputs.
  */
+function Section({
+  icon,
+  title,
+  description,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white">
+      <div className="border-b border-slate-100 px-5 py-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <span className="text-slate-400" aria-hidden="true">
+            {icon}
+          </span>
+          {title}
+        </h2>
+        {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
+      </div>
+      <div className="space-y-4 px-5 py-5">{children}</div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * General
+ * ------------------------------------------------------------------ */
+
 interface GeneralSettingsProps {
-  settings: Partial<{
-    phoneNumber: string;
-    whatsappNumber: string;
-    email: string;
-    address: string;
-    aboutText: string;
-  }>;
+  settings: Partial<SiteSettings>;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
 }
 
 function GeneralSettings({ settings, onChange }: GeneralSettingsProps) {
   return (
-    <>
-      {/* Contact Info Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-        <Input
-          id="phoneNumber"
-          name="phoneNumber"
-          label="Phone Number"
-          value={settings.phoneNumber || ''}
-          onChange={onChange}
-        />
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          label="Contact Email"
-          value={settings.email || ''}
-          onChange={onChange}
-        />
-      </div>
+    <div className="space-y-5">
+      <Section
+        icon={<Mail size={16} />}
+        title="Contact"
+        description="Shown in the site header, the footer and on the contact buttons."
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className={LABEL} htmlFor="phoneNumber">
+              Phone number
+            </label>
+            <Input
+              id="phoneNumber"
+              name="phoneNumber"
+              type="tel"
+              value={settings.phoneNumber || ''}
+              onChange={onChange}
+              placeholder="+254 799 526972"
+            />
+          </div>
 
-      {/* WhatsApp Checkout / Enquiry Number */}
-      <div className="mt-4 sm:mt-6">
-        <Input
-          id="whatsappNumber"
-          name="whatsappNumber"
-          type="tel"
-          label="WhatsApp Number (enquiries & checkout)"
-          value={settings.whatsappNumber || ''}
-          onChange={onChange}
-          placeholder={settings.phoneNumber || '254799526972'}
-          helperText="Product enquiry buttons and checkout send customers to this number via wa.me. Leave blank to use the Phone Number above. Include the country code (e.g. 254799526972)."
-        />
-      </div>
+          <div>
+            <label className={LABEL} htmlFor="email">
+              Contact email
+            </label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              value={settings.email || ''}
+              onChange={onChange}
+              placeholder="info@sternmedafrika.com"
+            />
+          </div>
+        </div>
 
-      {/* Physical Address */}
-      <Input
-        id="address"
-        name="address"
-        label="Physical Address"
-        value={settings.address || ''}
-        onChange={onChange}
-      />
+        <div>
+          <label className={LABEL} htmlFor="whatsappNumber">
+            WhatsApp number
+          </label>
+          <Input
+            id="whatsappNumber"
+            name="whatsappNumber"
+            type="tel"
+            value={settings.whatsappNumber || ''}
+            onChange={onChange}
+            placeholder={settings.phoneNumber || '254799526972'}
+            helperText="Enquiry buttons and checkout send customers here via wa.me. Leave blank to use the phone number above. Include the country code."
+          />
+        </div>
+      </Section>
 
-      {/* About Text */}
-      <div>
-        <label htmlFor="aboutText" className="block text-sm font-medium text-slate-700 mb-1">
-          About Text (Footer)
-        </label>
-        <textarea
-          id="aboutText"
-          name="aboutText"
-          rows={4}
-          value={settings.aboutText || ''}
-          onChange={onChange}
-          className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Brief description of your company for the footer..."
-        />
-      </div>
-    </>
+      <Section
+        icon={<MapPin size={16} />}
+        title="Address"
+        description="Shown in the footer."
+      >
+        <div>
+          <label className={LABEL} htmlFor="address">
+            Physical address
+          </label>
+          <Input
+            id="address"
+            name="address"
+            value={settings.address || ''}
+            onChange={onChange}
+            placeholder="Nairobi, Kenya"
+          />
+        </div>
+      </Section>
+
+      <Section
+        icon={<FileText size={16} />}
+        title="About"
+        description="A short description shown in the footer on every page."
+      >
+        <div>
+          <label className={LABEL} htmlFor="aboutText">
+            About text
+          </label>
+          <Textarea
+            id="aboutText"
+            name="aboutText"
+            rows={3}
+            value={settings.aboutText || ''}
+            onChange={onChange}
+            placeholder="Brief description of your company for the footer…"
+          />
+        </div>
+      </Section>
+    </div>
   );
 }
 
-/**
- * Home Page settings form fields
- */
+/* ------------------------------------------------------------------ *
+ * Home Page
+ * ------------------------------------------------------------------ */
+
 interface HomePageSettingsProps {
   settings: Partial<SiteSettings>;
   categories: Category[];
@@ -553,40 +451,6 @@ interface HomePageSettingsProps {
   setSettings: React.Dispatch<React.SetStateAction<Partial<SiteSettings>>>;
 }
 
-/**
- * Section configuration metadata
- */
-const SECTION_CONFIG = {
-  hero: {
-    label: 'Hero Banner',
-    description: 'Main landing page hero with carousel',
-    icon: LayoutTemplate,
-    color: 'bg-gradient-to-br from-slate-800 to-slate-900',
-    iconColor: 'text-white',
-  },
-  'featured-products': {
-    label: 'Featured Products',
-    description: 'Showcase featured/promoted products',
-    icon: Star,
-    color: 'bg-gradient-to-br from-blue-500 to-blue-700',
-    iconColor: 'text-white',
-  },
-  categories: {
-    label: 'Product Categories',
-    description: 'Display product category sections',
-    icon: Package,
-    color: 'bg-gradient-to-br from-emerald-500 to-emerald-700',
-    iconColor: 'text-white',
-  },
-  'promotional-banner': {
-    label: 'Promotional Banner',
-    description: 'Special offers and promotions',
-    icon: Eye,
-    color: 'bg-gradient-to-br from-amber-500 to-amber-700',
-    iconColor: 'text-white',
-  },
-} as const;
-
 function HomePageSettings({
   settings,
   categories,
@@ -595,18 +459,11 @@ function HomePageSettings({
   onChange,
   setSettings,
 }: HomePageSettingsProps) {
-  const [sectionDragged, setSectionDragged] = useState<string | null>(null);
-  const [expandedSection, setExpandedSection] = useState<string | null>(null);
-
-  // Get homepage sections from settings or use defaults
-  const homepageSections: HomepageSection[] = settings.homepageSections || DEFAULT_HOMEPAGE_SECTIONS;
-
-  // Compute ordered categories based on prominentCategories order
   const getOrderedCategories = (): Category[] => {
     if (!settings.prominentCategories || settings.prominentCategories.length === 0) {
       return [...categories].sort((a, b) => a.name.localeCompare(b.name));
     }
-    const categoryMap = new Map(categories.map(c => [c.id, c]));
+    const categoryMap = new Map(categories.map((c) => [c.id, c] as const));
     const ordered: Category[] = [];
     for (const id of settings.prominentCategories) {
       const cat = categoryMap.get(id);
@@ -619,72 +476,6 @@ function HomePageSettings({
     return ordered;
   };
   const sortedCategories = getOrderedCategories();
-
-  // ============ Section Handlers ============
-
-  const handleToggleSection = (sectionId: string) => {
-    const newSections = homepageSections.map(s =>
-      s.id === sectionId ? { ...s, enabled: !s.enabled } : s
-    );
-    setSettings(prev => ({ ...prev, homepageSections: newSections }));
-
-    // Also update legacy fields for backwards compatibility
-    if (sectionId === 'featured-products') {
-      const section = newSections.find(s => s.id === sectionId);
-      setSettings(prev => ({ ...prev, featuredSectionEnabled: section?.enabled ?? true }));
-    }
-  };
-
-  const handleSectionDragStart = (e: React.DragEvent, sectionId: string) => {
-    setSectionDragged(sectionId);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleSectionDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleSectionDrop = (e: React.DragEvent, targetId: string) => {
-    e.preventDefault();
-    if (!sectionDragged || sectionDragged === targetId) {
-      setSectionDragged(null);
-      return;
-    }
-
-    const currentOrder = homepageSections.map(s => s.id);
-    const draggedIdx = currentOrder.indexOf(sectionDragged);
-    const targetIdx = currentOrder.indexOf(targetId);
-
-    if (draggedIdx === -1 || targetIdx === -1 || draggedIdx === targetIdx) {
-      setSectionDragged(null);
-      return;
-    }
-
-    // Reorder sections
-    const newSections = [...homepageSections];
-    const [removed] = newSections.splice(draggedIdx, 1);
-    newSections.splice(targetIdx, 0, removed);
-
-    // Update positions
-    const positionedSections = newSections.map((s, idx) => ({ ...s, position: idx }));
-
-    setSettings(prev => ({ ...prev, homepageSections: positionedSections }));
-    setSectionDragged(null);
-  };
-
-  const handleFeaturedCountChange = (value: string) => {
-    const count = parseInt(value, 10) || 8;
-    setSettings(prev => ({ ...prev, featuredProductCount: count }));
-
-    // Update in sections config too
-    const newSections = homepageSections.map(s =>
-      s.id === 'featured-products' ? { ...s, config: { ...s.config, productCount: count } } : s
-    );
-    setSettings(prev => ({ ...prev, homepageSections: newSections }));
-  };
-
-  // ============ Category Drag Handlers ============
 
   const handleCategoryDragStart = (e: React.DragEvent, id: string) => {
     setDraggedCategory(id);
@@ -701,9 +492,10 @@ function HomePageSettings({
     const draggedId = draggedCategory;
     if (!draggedId) return;
 
-    const currentOrder = settings.prominentCategories && settings.prominentCategories.length > 0
-      ? settings.prominentCategories
-      : sortedCategories.map(c => c.id);
+    const currentOrder =
+      settings.prominentCategories && settings.prominentCategories.length > 0
+        ? settings.prominentCategories
+        : sortedCategories.map((c) => c.id);
 
     const draggedIndex = currentOrder.indexOf(draggedId);
     const targetIndex = currentOrder.indexOf(targetId);
@@ -717,12 +509,12 @@ function HomePageSettings({
     newOrder.splice(draggedIndex, 1);
     newOrder.splice(targetIndex, 0, draggedId);
 
-    setSettings(prev => ({ ...prev, prominentCategories: newOrder }));
+    setSettings((prev) => ({ ...prev, prominentCategories: newOrder }));
 
-    // Also persist to categories.order to keep AdminLandingConfig in sync
+    // Also persist to categories.order so the rendered order matches
     try {
       const categoryOrders = newOrder
-        .filter(id => categories.some(c => c.id === id))
+        .filter((id) => categories.some((c) => c.id === id))
         .map((id, index) => ({ id, order: index }));
       await api.reorderCategories(categoryOrders);
     } catch (error) {
@@ -732,243 +524,358 @@ function HomePageSettings({
     setDraggedCategory(null);
   };
 
-  // Sort sections by position for display
-  const sortedSections = [...homepageSections].sort((a, b) => a.position - b.position);
-  const featuredSection = sortedSections.find(s => s.id === 'featured-products');
-  const categoriesSection = sortedSections.find(s => s.id === 'categories');
-
   return (
-    <div className="space-y-8">
-      {/* Homepage Sections Configuration */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
+    <div className="space-y-5">
+      {/* ---------------- Layout: owned by the Landing page ---------------- */}
+      <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <LayoutTemplate size={18} className="mt-0.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
           <div>
-            <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-              <LayoutTemplate size={18} className="text-primary-600" />
-              Homepage Sections
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Drag sections to control the order they appear on your website
+            <h2 className="text-sm font-semibold text-slate-900">Page layout</h2>
+            <p className="mt-1 max-w-md text-xs leading-relaxed text-slate-500">
+              Which blocks the home page shows — hero, featured products, categories
+              and your call-to-action banners — and the order they appear in is set on
+              the Landing page.
             </p>
           </div>
-          <a
-            href="/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
-          >
-            <Eye size={14} />
-            Preview Homepage
-          </a>
         </div>
-
-        {/* Section Cards */}
-        <div className="space-y-3">
-          {sortedSections.map((section, index) => {
-            const config = SECTION_CONFIG[section.type as keyof typeof SECTION_CONFIG];
-            if (!config) return null;
-            const IconComponent = config.icon;
-            const isExpanded = expandedSection === section.id;
-            const isDragging = sectionDragged === section.id;
-
-            return (
-              <div
-                key={section.id}
-                draggable
-                onDragStart={(e) => handleSectionDragStart(e, section.id)}
-                onDragOver={handleSectionDragOver}
-                onDrop={(e) => handleSectionDrop(e, section.id)}
-                className={`bg-white rounded-xl border-2 transition-all ${
-                  isDragging
-                    ? 'opacity-50 border-primary-300 shadow-lg'
-                    : 'border-slate-200 hover:border-primary-200 hover:shadow-sm'
-                }`}
-              >
-                <div className="flex items-center gap-4 p-4">
-                  {/* Drag Handle */}
-                  <div className={`cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600 ${isDragging ? 'opacity-50' : ''}`}>
-                    <GripVertical size={20} />
-                  </div>
-
-                  {/* Section Icon */}
-                  <div className={`w-10 h-10 rounded-lg ${config.color} flex items-center justify-center shrink-0`}>
-                    <IconComponent size={20} className={config.iconColor} />
-                  </div>
-
-                  {/* Section Info */}
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-semibold text-slate-900">{config.label}</h4>
-                    <p className="text-xs text-slate-500 truncate">{config.description}</p>
-                  </div>
-
-                  {/* Position Badge */}
-                  <div className="hidden sm:flex items-center gap-1 text-xs text-slate-400">
-                    <span className="font-medium">#{index + 1}</span>
-                  </div>
-
-                  {/* Expand/Collapse for sections with config */}
-                  {(section.id === 'featured-products' || section.id === 'categories') && (
-                    <button
-                      type="button"
-                      onClick={() => setExpandedSection(isExpanded ? null : section.id)}
-                      className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                      {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                    </button>
-                  )}
-
-                  {/* Toggle Switch */}
-                  <button
-                    type="button"
-                    onClick={() => handleToggleSection(section.id)}
-                    className={`relative w-12 h-7 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
-                      section.enabled ? 'bg-primary-600' : 'bg-slate-300'
-                    }`}
-                    aria-checked={section.enabled}
-                    role="switch"
-                  >
-                    <span
-                      className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
-                        section.enabled ? 'translate-x-5' : 'translate-x-0.5'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Expanded Config */}
-                {isExpanded && section.id === 'featured-products' && (
-                  <div className="px-4 pb-4 border-t border-slate-100 pt-4">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Number of Featured Products
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <Input
-                        type="number"
-                        value={settings.featuredProductCount || featuredSection?.config?.productCount || 8}
-                        onChange={(e) => handleFeaturedCountChange(e.target.value)}
-                        min={1}
-                        max={20}
-                        className="w-24"
-                      />
-                      <span className="text-xs text-slate-500">
-                        products will be displayed (1-20)
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <a
+          href="/admin/landing-config"
+          className="inline-flex flex-shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+        >
+          <ExternalLink size={14} aria-hidden="true" />
+          Open Landing page
+        </a>
       </div>
 
-      {/* Divider */}
-      <div className="border-t border-slate-200" />
+      {/* ---------------- Featured products ---------------- */}
+      <Section
+        icon={<Star size={16} />}
+        title="Featured products"
+        description="How many products the featured row shows."
+      >
+        <div className="flex items-center gap-3">
+          {/*
+            Input hardcodes `w-full` on both its wrapper and its control, and a
+            same-utility `className` override loses on cascade order — so the
+            width is constrained on a wrapper instead of on the control.
+          */}
+          <div className="w-28 flex-shrink-0">
+            <Input
+              id="featuredProductCount"
+              name="featuredProductCount"
+              type="number"
+              min={1}
+              max={20}
+              value={settings.featuredProductCount ?? 8}
+              onChange={onChange}
+            />
+          </div>
+          <span className="text-xs text-slate-500">between 1 and 20</span>
+        </div>
+      </Section>
 
-      {/* Category Display Order */}
-      <div>
-        <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2 mb-1">
-          <Package size={18} className="text-emerald-600" />
-          Category Display Order
-        </h3>
-        <p className="text-xs text-slate-500 mb-4">
-          Controls the order of categories within the Categories section on the homepage
-        </p>
-
+      {/* ---------------- Category order ---------------- */}
+      <Section
+        icon={<Package size={16} />}
+        title="Category order"
+        description="The order categories appear in the shop-by-category strips on the home page."
+      >
         {sortedCategories.length > 0 ? (
-          <div className="space-y-2">
+          <ul className="space-y-2">
             {sortedCategories.map((category, index) => (
-              <div
+              <li
                 key={category.id}
                 draggable
                 onDragStart={(e) => handleCategoryDragStart(e, category.id)}
                 onDragOver={handleCategoryDragOver}
                 onDrop={(e) => handleCategoryDrop(e, category.id)}
-                className={`flex items-center gap-3 p-3 bg-white border-2 rounded-lg cursor-move transition-all ${
+                className={clsx(
+                  'flex cursor-move items-center gap-3 rounded-lg border bg-white px-3 py-2.5 transition-colors',
                   draggedCategory === category.id
-                    ? 'opacity-50 border-primary-300'
-                    : 'border-slate-200 hover:bg-slate-50 hover:border-primary-200'
-                }`}
+                    ? 'border-primary-300 opacity-50'
+                    : 'border-slate-200 hover:border-slate-300',
+                )}
               >
-                <div className="cursor-grab active:cursor-grabbing text-slate-400">
-                  <GripVertical size={18} />
-                </div>
+                <GripVertical size={16} className="flex-shrink-0 text-slate-300" aria-hidden="true" />
                 {category.image && (
                   <img
                     src={category.image}
                     alt=""
-                    className="w-8 h-8 rounded object-cover shrink-0"
+                    className="h-7 w-7 flex-shrink-0 rounded object-cover"
                     referrerPolicy="no-referrer"
                   />
                 )}
-                <span className="flex-1 text-sm font-medium text-slate-700 truncate">{category.name}</span>
-                <span className="text-xs font-semibold text-primary-600 bg-primary-50 px-2 py-1 rounded">
-                  #{index + 1}
+                <span className="min-w-0 flex-1 truncate text-sm text-slate-700">
+                  {category.name}
                 </span>
-              </div>
+                <span className="flex-shrink-0 text-xs tabular-nums text-slate-400">
+                  {index + 1}
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
         ) : (
-          <div className="bg-slate-50 rounded-lg p-6 text-center">
-            <Package size={32} className="text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-500">
-              No categories set to show on home page.
-            </p>
-            <p className="text-xs text-slate-400 mt-1">
-              Enable "Show on Home" in category settings to display them here.
+          <div className="rounded-lg bg-slate-50 px-4 py-6 text-center">
+            <Package size={24} className="mx-auto mb-2 text-slate-300" aria-hidden="true" />
+            <p className="text-sm text-slate-600">No categories are set to show on the home page.</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Turn on &ldquo;Show on home&rdquo; for a category on the Categories page and it
+              will appear here.
             </p>
           </div>
         )}
+      </Section>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Legal
+ * ------------------------------------------------------------------ */
+
+interface LegalSettingsProps {
+  settings: Partial<SiteSettings>;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+}
+
+/**
+ * One legal document field.
+ *
+ * Each carries the live link it feeds, a note on the accepted format, and a
+ * character count — the three things that were missing, which is why the two
+ * empty boxes looked like a broken form rather than unfinished content.
+ */
+function LegalField({
+  id,
+  name,
+  label,
+  description,
+  href,
+  value,
+  onChange,
+}: {
+  id: string;
+  name: string;
+  label: string;
+  description: string;
+  href: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+}) {
+  const empty = value.trim().length === 0;
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between gap-3">
+        <label className={clsx(LABEL, 'mb-0')} htmlFor={id}>
+          {label}
+        </label>
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex flex-shrink-0 items-center gap-1 text-xs text-primary-600 hover:text-primary-700"
+        >
+          View page
+          <ExternalLink size={12} aria-hidden="true" />
+        </a>
+      </div>
+
+      <Textarea
+        id={id}
+        name={name}
+        rows={10}
+        value={value}
+        onChange={onChange}
+        placeholder={`Paste the ${label.toLowerCase()} text here…`}
+      />
+
+      <div className="mt-1.5 flex items-center justify-between gap-3">
+        <p className="text-xs text-slate-500">{description}</p>
+        <p className={clsx('flex-shrink-0 text-xs', empty ? 'text-amber-600' : 'text-slate-400')}>
+          {empty ? 'Empty' : `${value.length.toLocaleString()} characters`}
+        </p>
       </div>
     </div>
   );
 }
 
-/**
- * Legal pages settings form fields
- */
-interface LegalSettingsProps {
-  settings: Partial<{
-    privacyPolicy: string;
-    termsOfService: string;
-  }>;
-  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-}
-
 function LegalSettings({ settings, onChange }: LegalSettingsProps) {
+  const privacy = settings.privacyPolicy ?? '';
+  const terms = settings.termsOfService ?? '';
+  const bothEmpty = privacy.trim() === '' && terms.trim() === '';
+
   return (
-    <div className="space-y-6">
-      {/* Privacy Policy */}
-      <div>
-        <label htmlFor="privacyPolicy" className="block text-sm font-medium text-slate-700 mb-2">
-          Privacy Policy Content
-        </label>
-        <textarea
+    <div className="space-y-5">
+      {bothEmpty && (
+        <p className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
+          <span>
+            Both documents are empty, but the footer still links to them. Until you fill
+            these in, those links lead to a blank page.
+          </span>
+        </p>
+      )}
+
+      <Section
+        icon={<FileText size={16} />}
+        title="Legal documents"
+        description="Plain text or simple HTML. Basic tags like <p>, <strong> and <ul> are rendered."
+      >
+        <LegalField
           id="privacyPolicy"
           name="privacyPolicy"
-          rows={8}
-          value={settings.privacyPolicy || ''}
+          label="Privacy policy"
+          description="Shown at the Privacy Policy link in the footer."
+          href="/privacy-policy"
+          value={privacy}
           onChange={onChange}
-          className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-xs"
-          placeholder="Enter your privacy policy content..."
         />
-      </div>
 
-      {/* Terms of Service */}
-      <div>
-        <label htmlFor="termsOfService" className="block text-sm font-medium text-slate-700 mb-2">
-          Terms & Conditions Content
-        </label>
-        <textarea
+        <div className="border-t border-slate-100" />
+
+        <LegalField
           id="termsOfService"
           name="termsOfService"
-          rows={8}
-          value={settings.termsOfService || ''}
+          label="Terms & conditions"
+          description="Shown at the Terms & Conditions link in the footer."
+          href="/terms"
+          value={terms}
           onChange={onChange}
-          className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 font-mono text-xs"
-          placeholder="Enter your terms and conditions content..."
         />
-      </div>
+      </Section>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Site Status
+ * ------------------------------------------------------------------ */
+
+interface SiteStatusPanelProps {
+  isDevelopmentMode: boolean | null;
+  onToggle: (value: boolean) => void;
+  togglingMode: boolean;
+  setTogglingMode: (value: boolean) => void;
+}
+
+/**
+ * Development mode.
+ *
+ * This is the only setting on the page that takes effect immediately rather
+ * than on Save — it has to, because it is the control an admin reaches for
+ * precisely when they cannot wait for a save round trip. It says so.
+ *
+ * Flat on purpose. The previous version had a gradient status banner, a second
+ * card restating the same status, and a large gradient call to action, for one
+ * boolean.
+ */
+function SiteStatusPanel({
+  isDevelopmentMode,
+  onToggle,
+  togglingMode,
+  setTogglingMode,
+}: SiteStatusPanelProps) {
+  const showSuccess = useToastSuccess();
+  const showError = useToastError();
+
+  const handleToggle = async (next: boolean) => {
+    setTogglingMode(true);
+    try {
+      await setDevMode(next);
+      onToggle(next);
+      showSuccess(next ? 'Site is now in development mode.' : 'Site is live.');
+    } catch (error) {
+      console.error('Failed to toggle development mode:', error);
+      showError('Failed to change the site status. Please try again.');
+    } finally {
+      setTogglingMode(false);
+    }
+  };
+
+  const status = (isDevelopmentMode === null
+    ? { dot: 'bg-slate-400', text: 'Checking…' }
+    : isDevelopmentMode
+      ? { dot: 'bg-amber-500', text: 'Development mode' }
+      : { dot: 'bg-emerald-500', text: 'Live' }
+  );
+
+  return (
+    <div className="space-y-5">
+      <section className="rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="mt-1.5 flex h-2.5 w-2.5 flex-shrink-0" aria-hidden="true">
+              <span className={clsx('h-full w-full rounded-full', status.dot)} />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">
+                The website is {isDevelopmentMode ? 'hidden from visitors' : 'live'}
+              </h2>
+              <p className="mt-1 max-w-md text-xs leading-relaxed text-slate-500">
+                {isDevelopmentMode
+                  ? 'Visitors see an "under development" page. The admin portal still works, so you can keep editing.'
+                  : 'Every page is reachable by the public. This is the normal state for a running site.'}
+              </p>
+            </div>
+          </div>
+
+          <Toggle
+            checked={isDevelopmentMode === true}
+            onCheckedChange={handleToggle}
+            disabled={isDevelopmentMode === null || togglingMode}
+            label="Development mode"
+            className="flex-shrink-0"
+          />
+        </div>
+
+        <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+          This takes effect immediately — there is nothing to save.
+        </p>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white px-5 py-5">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <Power size={16} className="text-slate-400" aria-hidden="true" />
+          What each mode means
+        </h2>
+
+        <dl className="mt-4 divide-y divide-slate-100">
+          <div className="flex gap-4 py-3 first:pt-0">
+            <dt className="w-32 flex-shrink-0 text-sm font-medium text-slate-700">Public visitors</dt>
+            <dd className="text-sm text-slate-500">
+              {isDevelopmentMode
+                ? 'An "under development" notice.'
+                : 'The full site, every page.'}
+            </dd>
+          </div>
+          <div className="flex gap-4 py-3">
+            <dt className="w-32 flex-shrink-0 text-sm font-medium text-slate-700">Admin portal</dt>
+            <dd className="text-sm text-slate-500">
+              Always available. Sign in at <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">/login</code>.
+            </dd>
+          </div>
+          <div className="flex gap-4 py-3 last:pb-0">
+            <dt className="w-32 flex-shrink-0 text-sm font-medium text-slate-700">Search engines</dt>
+            <dd className="text-sm text-slate-500">
+              {isDevelopmentMode
+                ? 'The site may drop out of search results while it is hidden.'
+                : 'Indexed as normal.'}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      {isDevelopmentMode && (
+        <p className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <Globe size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
+          <span>
+            Visitors cannot buy from you right now. Products and orders still work from
+            the admin portal.
+          </span>
+        </p>
+      )}
     </div>
   );
 }

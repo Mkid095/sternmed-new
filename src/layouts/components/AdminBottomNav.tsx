@@ -15,25 +15,27 @@ import {
 import { clsx } from 'clsx';
 import { useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
+import { canAccessPage } from '../../features/admin/permissions';
 import { useNavigate } from 'react-router-dom';
 
 interface NavItem {
   to: string;
   icon: typeof LayoutDashboard;
   label: string;
-  adminOnly?: boolean;
+  /** Key in `users.permissions` - the same list the sidebar uses. */
+  pageKey: string;
 }
 
 const menuItems: NavItem[] = [
-  { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/admin/products', icon: Package, label: 'Products' },
-  { to: '/admin/categories', icon: LayoutList, label: 'Categories' },
-  { to: '/admin/orders', icon: ShoppingCart, label: 'Orders' },
-  { to: '/admin/landing-config', icon: LayoutDashboard, label: 'Landing Page' },
-  { to: '/admin/banners', icon: ImageIcon, label: 'Banners' },
-  { to: '/admin/mails', icon: Mail, label: 'Mails', adminOnly: true },
-  { to: '/admin/users', icon: Users, label: 'Users', adminOnly: true },
-  { to: '/admin/settings', icon: Settings, label: 'Settings' },
+  { to: '/admin', pageKey: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/admin/products', pageKey: 'products', icon: Package, label: 'Products' },
+  { to: '/admin/categories', pageKey: 'categories', icon: LayoutList, label: 'Categories' },
+  { to: '/admin/orders', pageKey: 'orders', icon: ShoppingCart, label: 'Orders' },
+  { to: '/admin/landing-config', pageKey: 'landing-config', icon: LayoutDashboard, label: 'Landing Page' },
+  { to: '/admin/banners', pageKey: 'banners', icon: ImageIcon, label: 'Banners' },
+  { to: '/admin/mails', pageKey: 'mails', icon: Mail, label: 'Mails' },
+  { to: '/admin/users', pageKey: 'users', icon: Users, label: 'Users' },
+  { to: '/admin/settings', pageKey: 'settings', icon: Settings, label: 'Settings' },
 ];
 
 export function AdminBottomNav() {
@@ -73,7 +75,7 @@ export function AdminBottomNav() {
   };
 
   const filteredMenuItems = menuItems.filter(
-    (item) => !item.adminOnly || user?.role === 'admin'
+    (item) => canAccessPage(user, item.pageKey)
   );
 
   return (

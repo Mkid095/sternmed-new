@@ -88,7 +88,7 @@ export default function PrivacyPolicy() {
       <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8 md:p-12">
         <PageHeader settings={settings} />
 
-        <div className="prose prose-slate max-w-none">
+        <div className="legal-content">
           {settings?.privacyPolicy ? (
             // Sanitize HTML before rendering to prevent XSS
             <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(settings.privacyPolicy) }} />

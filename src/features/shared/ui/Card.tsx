@@ -1,9 +1,31 @@
 import React, { ReactNode, useEffect, useState } from 'react';
-import { ShoppingBag, MessageCircle } from 'lucide-react';
+import { ShoppingBag, MessageCircle, ImageOff } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ProductStatus, SiteSettings } from '../../../types';
 import { api } from '../../../services/api';
 import { generateWhatsAppLink } from '../../../constants';
+import { resolveWhatsAppNumber } from '../../../services/supabase/settings.service';
+
+/**
+ * Site settings, fetched once and shared by every card on the page.
+ *
+ * Each ProductCard used to call `api.getSettings()` for itself, so a page with
+ * a featured row and several category strips issued dozens of identical
+ * requests for one small row of key/value settings. The promise is cached at
+ * module scope, so the first card starts the fetch and the rest await it.
+ */
+let settingsPromise: Promise<SiteSettings> | null = null;
+function loadSettings(): Promise<SiteSettings> {
+  if (!settingsPromise) {
+    settingsPromise = api.getSettings().catch((err) => {
+      // Don't cache a failure: a later mount should get a fresh attempt.
+      settingsPromise = null;
+      console.error('Failed to load site settings:', err);
+      throw err;
+    });
+  }
+  return settingsPromise;
+}
 
 interface CardProps {
   children: ReactNode;
@@ -90,11 +112,22 @@ export function ProductCard({
     }
   };
 
-  // Fetch settings for WhatsApp contact
+  // Shared with every other card, so this is a cache hit rather than a request.
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   useEffect(() => {
-    api.getSettings().then(setSettings).catch(console.error);
+    let cancelled = false;
+    loadSettings().then((s) => { if (!cancelled) setSettings(s); }).catch(() => {});
+    return () => { cancelled = true; };
   }, []);
+
+  // A missing or dead image URL used to leave the browser drawing the alt text
+  // across the whole tile. The name is already in the card body, so the image is
+  // decorative (`alt=""`) and a broken one gets a placeholder instead.
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [product.imageUrl]);
 
   return (
     <div
@@ -103,12 +136,23 @@ export function ProductCard({
     >
       {/* Image Container */}
       <div className="aspect-square bg-slate-100 relative overflow-hidden">
-        <img
-          src={product.imageUrl}
-          alt={product.name}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          loading="lazy"
-        />
+        {product.imageUrl && !imageFailed ? (
+          <img
+            src={product.imageUrl}
+            alt=""
+            onError={() => setImageFailed(true)}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 grid place-items-center bg-slate-100"
+          >
+            <ImageOff size={26} className="text-slate-300" />
+          </span>
+        )}
         {/* Featured Badge - smaller, subtler */}
         {product.isFeatured && (
           <div className="absolute top-2 left-2 bg-amber-500 text-white px-2 py-0.5 rounded text-xs font-semibold shadow-sm">
@@ -152,9 +196,21 @@ export function ProductCard({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              const phone = settings?.phoneNumber || '254700000000';
+              /*
+                `resolveWhatsAppNumber`, not `settings.phoneNumber`. The raw
+                setting is a display string — "+254 799 526972" — and dropping
+                that straight into wa.me produces a dead link. The old fallback
+                of '254700000000' was worse: if settings had not loaded yet, or
+                the request failed, every enquiry went to a number that is not
+                the business's.
+              */
+              const phone = resolveWhatsAppNumber(settings);
+              if (!phone) {
+                console.warn('Enquiry link unavailable: no WhatsApp number configured.');
+                return;
+              }
               const message = `Hi, I'd like to enquire about: ${product.name}`;
-              window.open(generateWhatsAppLink(phone, message), '_blank');
+              window.open(generateWhatsAppLink(phone, message), '_blank', 'noopener');
             }}
             className="w-full py-2 flex items-center justify-center gap-2 bg-primary-600 text-white rounded font-medium hover:bg-primary-700 transition-colors"
           >

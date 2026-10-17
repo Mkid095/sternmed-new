@@ -7,3 +7,6 @@ coverage/
 .env*
 !.env.example
 *.json
+
+# Supabase CLI local state
+supabase/.temp/

@@ -3,6 +3,7 @@ export { Input, Textarea } from './Input';
 export { Modal } from './Modal';
 export { Table } from './Table';
 export type { Column } from './Table';
+export { Toggle } from './Toggle';
 export { Card, CardHeader, ProductCard } from './Card';
 export { ImageUpload } from './ImageUpload';
 export { MultiImageUpload } from './MultiImageUpload';

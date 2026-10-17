@@ -9,10 +9,16 @@
  * - Delete users (with last admin protection)
  * - Role display (admin/staff)
  *
+ * The add/edit user dialog was the last hand-rolled modal here and now uses the
+ * shared Radix-backed Modal, which brings a focus trap, Escape handling,
+ * role="dialog", focus on open and restore on close, and a viewport height cap.
+ * The mobile filter sheet below the header is a drawer, not a dialog, and is
+ * deliberately left as it is.
+ *
  * @module AdminUsers
  */
 
-import { useState, useEffect, useMemo, FormEvent, type Key } from 'react';
+import { useState, useEffect, useMemo, useId, FormEvent, type Key } from 'react';
 import {
   Shield,
   Plus,
@@ -26,9 +32,11 @@ import {
   Filter
 } from 'lucide-react';
 import { User } from '../../../types';
+import { UserFormModal, type UserFormData } from './components/UserFormModal';
+import { serialisePermissions } from '../permissions';
 import { api } from '../../../services/api';
 import { useAuthStore } from '../../../store/authStore';
-import { ConfirmationModal, useConfirmationModal, useToastSuccess, useToastError } from '../../shared/ui';
+import { ConfirmationModal, Modal, useConfirmationModal, useToastSuccess, useToastError } from '../../shared/ui';
 
 /** Minimum password length (mirrors Firebase Auth's floor) */
 const MIN_PASSWORD_LENGTH = 8;
@@ -45,18 +53,24 @@ export default function AdminUsers() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'staff'>('all');
+  // `email_user` was missing here, which is why this page listed nine email
+  // accounts it could not filter down to, count, or explain.
+  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'staff' | 'email_user'>('all');
   const [isAdding, setIsAdding] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<UserFormData>({
     name: '',
     email: '',
     password: '',
-    role: 'staff' as 'admin' | 'staff',
+    role: 'staff',
+    // Nothing granted by default: a new staff member should be given pages
+    // deliberately, not inherit the whole admin.
+    permissions: [],
   });
+  const [sendingReset, setSendingReset] = useState(false);
 
   const showSuccess = useToastSuccess();
   const showError = useToastError();
@@ -91,6 +105,7 @@ export default function AdminUsers() {
 
   const adminCount = users.filter((u) => u.role === 'admin').length;
   const staffCount = users.filter((u) => u.role === 'staff').length;
+  const emailUserCount = users.filter((u) => u.role === 'email_user').length;
 
   const canDeleteUser = (user: User) => {
     if (user.role === 'admin' && adminCount <= 1) {
@@ -100,7 +115,7 @@ export default function AdminUsers() {
   };
 
   const openAddForm = () => {
-    setFormData({ name: '', email: '', password: '', role: 'staff' });
+    setFormData({ name: '', email: '', password: '', role: 'staff', permissions: [] });
     setEditingUser(null);
     setIsAdding(true);
   };
@@ -110,7 +125,10 @@ export default function AdminUsers() {
       name: user.name,
       email: user.email,
       password: '',
-      role: user.role,
+      role: user.role === 'email_user' ? 'staff' : user.role,
+      // Admins are unrestricted, so their editor shows no picker. Reading the
+      // stored list here keeps the state honest either way.
+      permissions: Array.isArray(user.permissions) ? user.permissions : [],
     });
     setEditingUser(user);
     setIsAdding(true);
@@ -119,7 +137,7 @@ export default function AdminUsers() {
   const closeForm = () => {
     setIsAdding(false);
     setEditingUser(null);
-    setFormData({ name: '', email: '', password: '', role: 'staff' });
+    setFormData({ name: '', email: '', password: '', role: 'staff', permissions: [] });
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -143,11 +161,20 @@ export default function AdminUsers() {
 
     try {
       if (editingUser) {
-        // Track what actually changed so we only report real updates
+        // Track what actually changed so we only report real updates.
+        //
+        // Page access counts as a change on its own. Without this, editing
+        // somebody's permissions and pressing Save reported "Nothing to
+        // update" and silently did nothing.
         const roleChanged = formData.role !== editingUser.role;
         const passwordChanged = newPassword.length > 0;
+        const previousPermissions = new Set(editingUser.permissions ?? []);
+        const nextPermissions = new Set<string>(formData.permissions);
+        const permissionsChanged =
+          previousPermissions.size !== nextPermissions.size ||
+          [...nextPermissions].some((key) => !previousPermissions.has(key));
 
-        if (!roleChanged && !passwordChanged) {
+        if (!roleChanged && !passwordChanged && !permissionsChanged) {
           showError('Nothing to update');
           return;
         }
@@ -162,16 +189,29 @@ export default function AdminUsers() {
           await api.updateUserRole(editingUser.id, formData.role);
         }
 
-        if (passwordChanged && roleChanged) {
-          showSuccess(`Password and role updated for ${editingUser.name}`);
-        } else if (passwordChanged) {
-          showSuccess(`Password updated for ${editingUser.name}`);
-        } else {
-          showSuccess(`User role updated to ${formData.role}`);
+        if (permissionsChanged) {
+          await api.updateUserPermissions(
+            editingUser.id,
+            serialisePermissions(formData.role, nextPermissions),
+          );
         }
+
+        const changes = [
+          passwordChanged && 'password',
+          roleChanged && 'role',
+          permissionsChanged && 'page access',
+        ].filter(Boolean);
+        showSuccess(`Updated ${changes.join(', ')} for ${editingUser.name}`);
       } else {
         // Create new user
         await api.register(formData.email, formData.password, formData.name, formData.role);
+        // `register` creates the Firebase account; the Supabase row it writes is
+        // then given the page access chosen in the form.
+        const created = await api.getUsers();
+        const match = created.find((u) => u.email.toLowerCase() === formData.email.toLowerCase());
+        if (match && formData.role !== 'admin') {
+          await api.updateUserPermissions(match.id, serialisePermissions(formData.role, new Set(formData.permissions)));
+        }
         showSuccess(`User added successfully as ${formData.role}`);
       }
 
@@ -182,6 +222,27 @@ export default function AdminUsers() {
       showError(error.message || (editingUser ? 'Failed to update user' : 'Failed to add user'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  /**
+   * Emails the user a Firebase password reset link.
+   *
+   * This is the working alternative to setting a password inline, which needs a
+   * service-account key this project does not have. It goes through the client
+   * SDK, so it needs no secret at all.
+   */
+  const handleSendResetEmail = async () => {
+    if (!editingUser?.email) return;
+    setSendingReset(true);
+    try {
+      await api.resetPassword(editingUser.email);
+      showSuccess(`Password reset sent to ${editingUser.email}`);
+    } catch (error) {
+      console.error('Failed to send password reset:', error);
+      showError('Could not send the reset email. Check the address and try again.');
+    } finally {
+      setSendingReset(false);
     }
   };
 
@@ -221,37 +282,25 @@ export default function AdminUsers() {
 
   return (
     <div className="space-y-4 pb-20 lg:pb-0">
-      {/* Header */}
+      {/*
+        No page title. The layout header bar already names this route
+        ("Users & roles") and the page printed its own "Users & Roles" a few
+        pixels below it - the same words twice, in two capitalisations.
+      */}
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center gap-3">
-              <Shield size={28} className="text-primary-600" />
-              Users & Roles
-            </h1>
-            <p className="text-sm text-slate-500 mt-2">
-              Manage admin and staff user accounts
-            </p>
-          </div>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-slate-500">
+            {users.length === 0
+              ? 'No accounts yet'
+              : `${users.length} accounts - ${adminCount} admin, ${staffCount} staff, ${emailUserCount} email user${emailUserCount === 1 ? '' : 's'}`}
+          </p>
           <button
             onClick={openAddForm}
-            className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium transition-colors shadow-sm"
+            className="hidden items-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 font-medium text-white shadow-sm transition-colors hover:bg-primary-700 sm:flex"
           >
-            <Plus size={20} />
+            <Plus size={18} aria-hidden="true" />
             Add User
           </button>
-        </div>
-
-        {/* Stats */}
-        <div className="flex flex-wrap gap-3">
-          <div className="flex items-center gap-2 px-4 py-2 bg-purple-50 border border-purple-200 rounded-lg">
-            <Crown size={18} className="text-purple-600" />
-            <span className="text-sm font-medium text-purple-700">{adminCount} Admin</span>
-          </div>
-          <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
-            <UserCircle size={18} className="text-emerald-600" />
-            <span className="text-sm font-medium text-emerald-700">{staffCount} Staff</span>
-          </div>
         </div>
 
         {/* Search and Filters */}
@@ -294,6 +343,7 @@ export default function AdminUsers() {
               <option value="all">All Roles</option>
               <option value="admin">Admins</option>
               <option value="staff">Staff</option>
+              <option value="email_user">Email users</option>
             </select>
             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
               ⌄
@@ -359,6 +409,8 @@ export default function AdminUsers() {
           formData={formData}
           onChange={setFormData}
           onSubmit={handleSubmit}
+          onSendResetEmail={editingUser ? handleSendResetEmail : undefined}
+          sendingReset={sendingReset}
           onClose={closeForm}
           isEditing={!!editingUser}
           saving={saving}
@@ -406,7 +458,6 @@ export default function AdminUsers() {
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">User</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Role</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -501,209 +552,99 @@ function UserCompactCard({ user, onEdit, onDelete, canDelete }: UserCardProps) {
 }
 
 /**
+ * Presentation per role.
+ *
+ * The label is written out rather than derived from the raw value, because
+ * `capitalize` on `email_user` renders "Email_user" - the underscore is CSS's
+ * word-boundary marker, not something a person should read.
+ */
+const ROLE_TONE: Record<
+  string,
+  { label: string; avatar: string; badge: string; Icon: typeof Crown }
+> = {
+  admin: {
+    label: 'Admin',
+    avatar: 'bg-purple-100 text-purple-700',
+    badge: 'bg-purple-100 text-purple-700',
+    Icon: Crown,
+  },
+  staff: {
+    label: 'Staff',
+    avatar: 'bg-emerald-100 text-emerald-700',
+    badge: 'bg-emerald-100 text-emerald-700',
+    Icon: UserCircle,
+  },
+  email_user: {
+    label: 'Email user',
+    avatar: 'bg-slate-100 text-slate-600',
+    badge: 'bg-slate-100 text-slate-600',
+    Icon: Mail,
+  },
+};
+
+/**
  * User Table Row (Desktop)
  */
 function UserTableRow({ user, onEdit, onDelete, canDelete }: UserCardProps) {
-  const isAdmin = user.role === 'admin';
+  const tone = ROLE_TONE[user.role] ?? ROLE_TONE.staff;
+  const RoleIcon = tone.Icon;
 
   return (
-    <tr className="hover:bg-slate-50 transition-colors">
+    <tr className="transition-colors hover:bg-slate-50">
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 ${
-            isAdmin ? 'bg-purple-600' : 'bg-emerald-600'
-          }`}>
+          <span
+            aria-hidden="true"
+            className={`grid h-9 w-9 flex-shrink-0 place-items-center rounded-full text-sm font-semibold ${tone.avatar}`}
+          >
             {user.name.charAt(0).toUpperCase()}
+          </span>
+          <div className="min-w-0">
+            <div className="truncate font-medium text-slate-900">{user.name}</div>
+            <a
+              href={`mailto:${user.email}`}
+              className="block max-w-[240px] truncate text-xs text-slate-500 transition-colors hover:text-slate-900 hover:underline"
+            >
+              {user.email}
+            </a>
           </div>
-          <div className="font-medium text-slate-900">{user.name}</div>
         </div>
       </td>
       <td className="px-4 py-3">
-        <span className="text-sm text-slate-600">{user.email}</span>
-      </td>
-      <td className="px-4 py-3">
         <span
-          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold capitalize ${
-            isAdmin
-              ? 'bg-purple-100 text-purple-700'
-              : 'bg-emerald-100 text-emerald-700'
-          }`}
+          className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold ${tone.badge}`}
         >
-          {isAdmin ? <Crown size={12} /> : <UserCircle size={12} />}
-          {user.role}
+          <RoleIcon size={12} aria-hidden="true" />
+          {tone.label}
         </span>
       </td>
       <td className="px-4 py-3 text-right">
         <div className="flex justify-end gap-1">
+          {/*
+            Quiet until hovered. A permanently red Delete on every row turned
+            the list into a column of warnings, and `title` alone is not an
+            accessible name - these say what they act on.
+          */}
           <button
+            type="button"
             onClick={() => onEdit(user)}
-            className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-            title="Edit user"
+            aria-label={`Edit ${user.name}`}
+            className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-800"
           >
-            <Edit size={16} />
+            <Edit size={15} aria-hidden="true" />
           </button>
           <button
+            type="button"
             onClick={() => onDelete(user.id, user.name)}
             disabled={!canDelete}
-            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label={canDelete ? `Delete ${user.name}` : `Cannot delete ${user.name} - the last admin`}
             title={canDelete ? 'Delete user' : 'Cannot delete the last admin'}
+            className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Trash2 size={16} />
+            <Trash2 size={15} aria-hidden="true" />
           </button>
         </div>
       </td>
     </tr>
-  );
-}
-
-/**
- * User Form Modal
- */
-interface UserFormModalProps {
-  key?: Key;
-  formData: {
-    name: string;
-    email: string;
-    password: string;
-    role: 'admin' | 'staff';
-  };
-  onChange: (data: any) => void;
-  onSubmit: (e: FormEvent) => void;
-  onClose: () => void;
-  isEditing: boolean;
-  saving?: boolean;
-}
-
-function UserFormModal({ formData, onChange, onSubmit, onClose, isEditing, saving }: UserFormModalProps) {
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-200">
-          <h2 className="text-lg font-bold text-slate-900">
-            {isEditing ? 'Edit User' : 'Add New User'}
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={onSubmit} className="flex-1 overflow-y-auto flex flex-col">
-          <div className="p-4 space-y-4 pb-24 sm:pb-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => onChange({ ...formData, name: e.target.value })}
-                placeholder="John Doe"
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email Address *</label>
-              <input
-                type="email"
-                required
-                value={formData.email}
-                onChange={(e) => onChange({ ...formData, email: e.target.value })}
-                placeholder="john@example.com"
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                {isEditing ? 'New Password' : 'Password *'}
-              </label>
-              <input
-                type="password"
-                required={!isEditing}
-                minLength={!isEditing ? MIN_PASSWORD_LENGTH : undefined}
-                autoComplete="new-password"
-                value={formData.password}
-                onChange={(e) => onChange({ ...formData, password: e.target.value })}
-                placeholder={isEditing ? 'Leave empty to keep current' : '••••••••'}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-              <p className="text-xs text-slate-400 mt-1">
-                {isEditing
-                  ? `Set a new password (min ${MIN_PASSWORD_LENGTH} characters). Leave empty to keep the current one.`
-                  : `At least ${MIN_PASSWORD_LENGTH} characters.`}
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Role *</label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...formData, role: 'admin' })}
-                  className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium transition-colors ${
-                    formData.role === 'admin'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <Crown size={18} />
-                  <span>Admin</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...formData, role: 'staff' })}
-                  className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium transition-colors ${
-                    formData.role === 'staff'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <UserCircle size={18} />
-                  <span>Staff</span>
-                </button>
-              </div>
-            </div>
-
-            {!isEditing && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  <strong>Note:</strong> The user will receive an email to set their password.
-                </p>
-              </div>
-            )}
-
-            {isEditing && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-sm text-amber-800">
-                  <strong>Edit Mode:</strong> You can change the user's role and set a new
-                  password. Name and email cannot be modified.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Footer - INSIDE form */}
-          <div className="flex gap-3 p-4 border-t border-slate-200 bg-white sm:bg-slate-50 pb-20 sm:pb-4 mt-auto">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? 'Saving...' : isEditing ? 'Update User' : 'Add User'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
   );
 }

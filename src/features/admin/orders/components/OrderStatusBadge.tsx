@@ -63,3 +63,47 @@ export function OrderStatusBadge({
     </span>
   );
 }
+
+
+/**
+ * Payment status badge.
+ *
+ * A sibling of OrderStatusBadge rather than a variant of it: payment has its
+ * own vocabulary (paid / failed / refunded) that does not overlap the order
+ * statuses, and mapping one onto the other to borrow the colours would make the
+ * tone mean two different things.
+ *
+ * @module OrderStatusBadge
+ */
+export interface PaymentStatusBadgeProps {
+  status: string;
+  className?: string;
+}
+
+const PAYMENT_TONE: Record<string, { bg: string; fg: string }> = {
+  paid: { bg: 'bg-emerald-100', fg: 'text-emerald-800' },
+  pending: { bg: 'bg-amber-100', fg: 'text-amber-800' },
+  failed: { bg: 'bg-red-100', fg: 'text-red-800' },
+  refunded: { bg: 'bg-slate-100', fg: 'text-slate-700' },
+};
+
+export function PaymentStatusBadge({ status, className = '' }: PaymentStatusBadgeProps) {
+  // An unrecognised status falls back to neutral rather than silently reading
+  // as paid.
+  const tone = PAYMENT_TONE[status] ?? { bg: 'bg-slate-100', fg: 'text-slate-700' };
+
+  return (
+    <span
+      className={[
+        'inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold capitalize',
+        tone.bg,
+        tone.fg,
+        className,
+      ].join(' ')}
+      role="status"
+      aria-label={`Payment status: ${status}`}
+    >
+      {status}
+    </span>
+  );
+}

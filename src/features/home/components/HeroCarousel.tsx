@@ -1,7 +1,46 @@
-import { useState, useEffect } from 'react';
-import { Banner } from '../../../types';
-import { ChevronLeft, ChevronRight, ArrowRight, ShoppingBag } from 'lucide-react';
+/**
+ * Homepage hero carousel.
+ *
+ * What this fixes
+ * ---------------
+ * 1. **The overlay covered the flyer.** The active slide sat at `z-10` while a
+ *    text overlay had no z-index at all, so the banner painted straight over
+ *    the heading, tagline and Shop Now button on every screen size.
+ *
+ *    The overlay is gone entirely now. These flyers already carry their own
+ *    headline ("WELCOME TO STERNMED AFRIKA LTD."), and stacking the site's h1
+ *    and a Shop Now button on top of that produced two overlapping headlines.
+ *    The flyer IS the message, and the image itself is the link.
+ *
+ * 2. **Banners overflowed the viewport.** The hero was a fixed height per
+ *    breakpoint (`h-[280px] sm:h-[400px] md:h-[500px]`) with `object-cover`. A
+ *    1900x500 flyer — 3.8:1 — dropped into a 375x280 box (1.34:1) had to scale
+ *    1.23x to cover, throwing away half its width: on a phone the word
+ *    "STERNMED" ran off the left edge of the screen.
+ *
+ * 3. **The image is the link.** A slide with a `linkTarget` is wrapped in a
+ *    button covering the whole image and navigates on click — there is no
+ *    separate call-to-action to aim at. A slide without one is decoration, and
+ *    is not focusable, so a screen reader is never offered a dead link.
+ *
+ * How it fits
+ * -----------
+ * On a phone the slide box adopts the flyer's OWN aspect ratio, read from the
+ * loaded image and published as the `--slide-ratio` custom property. The box is
+ * then exactly the right shape at any width, so `object-cover` crops nothing
+ * and nothing overflows. There is no guessed ratio to be wrong on a phone.
+ *
+ * From `sm` up the box switches to fixed ratios close enough to a standard
+ * flyer that cover only trims a little vertical space, so it still fills edge
+ * to edge.
+ *
+ * @module HeroCarousel
+ */
+
+import { useEffect, useState, type CSSProperties, type SyntheticEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import type { Banner } from '../../../types';
 
 interface HeroCarouselProps {
   banners: Banner[];
@@ -9,6 +48,7 @@ interface HeroCarouselProps {
 
 export function HeroCarousel({ banners }: HeroCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [ratio, setRatio] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -19,78 +59,144 @@ export function HeroCarousel({ banners }: HeroCarouselProps) {
     return () => clearInterval(interval);
   }, [banners.length]);
 
+  // A banner deleted or parked mid-session must not leave the index past the end.
+  useEffect(() => {
+    setCurrentIndex((prev) => (banners.length === 0 ? 0 : Math.min(prev, banners.length - 1)));
+  }, [banners.length]);
+
   if (banners.length === 0) return null;
 
-  const nextBanner = () => setCurrentIndex((prev) => (prev + 1) % banners.length);
-  const prevBanner = () => setCurrentIndex((prev) => (prev - 1 + banners.length) % banners.length);
+  const hasMultiple = banners.length > 1;
+
+  const goTo = (index: number) => setCurrentIndex(index);
+  const next = () => goTo((currentIndex + 1) % banners.length);
+  const prev = () => goTo((currentIndex - 1 + banners.length) % banners.length);
+
+  /** Each banner can differ in shape, so the box follows whichever is showing. */
+  const measure = (e: SyntheticEvent<HTMLImageElement>) => {
+    const { naturalWidth, naturalHeight } = e.currentTarget;
+    if (naturalWidth && naturalHeight) setRatio(`${naturalWidth} / ${naturalHeight}`);
+  };
+
+  // Falls back to the 1900x500 guidance until an image reports its own size.
+  const slideStyle = { '--slide-ratio': ratio ?? '1900 / 500' } as CSSProperties;
 
   return (
-    <section className="relative w-full h-[280px] sm:h-[400px] md:h-[500px] bg-gradient-to-br from-slate-900 to-slate-800 overflow-hidden">
-      {/* Banners */}
-      {banners.map((banner, index) => (
-        <div
-          key={banner.id}
-          className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-            index === currentIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'
-          }`}
-        >
-          <img
-            src={banner.imageUrl}
-            alt={`Banner ${index + 1}`}
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        </div>
-      ))}
+    <section
+      className="relative w-full overflow-hidden bg-slate-900"
+      aria-roledescription="carousel"
+      aria-label="Featured banners"
+    >
+      {/*
+        `aspect-[var(--slide-ratio)]` takes the flyer's own shape on a phone;
+        `sm:` and up replace it with ratios a standard flyer nearly fills.
+      */}
+      <div
+        className="relative aspect-[var(--slide-ratio)] sm:aspect-[16/9] md:h-[420px] md:aspect-auto lg:h-[500px]"
+        style={slideStyle}
+      >
+        {banners.map((banner, index) => {
+          const isActive = index === currentIndex;
+          const target = banner.linkTarget;
 
-      {/* Content Overlay */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
-        <h1 className="text-3xl sm:text-5xl md:text-6xl font-bold text-white mb-4 drop-shadow-lg">
-          Sternmed Afrika
-        </h1>
-        <p className="text-base sm:text-lg md:text-xl text-white/90 mb-6 max-w-2xl">
-          Your Trusted Medical Equipment Partner
-        </p>
-        <button
-          onClick={() => navigate('/shop')}
-          className="flex items-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
-        >
-          <ShoppingBag size={20} />
-          Shop Now
-        </button>
+          return (
+            <div
+              key={banner.id}
+              className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+                isActive ? 'opacity-100' : 'pointer-events-none opacity-0'
+              }`}
+              aria-hidden={!isActive}
+            >
+              {/* The whole slide is the click target when it has a link. */}
+              {target ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(target)}
+                  className="absolute inset-0 block w-full cursor-pointer"
+                  tabIndex={isActive ? 0 : -1}
+                  aria-label={describeTarget(target)}
+                >
+                  <SlideImage banner={banner} onLoad={measure} />
+                </button>
+              ) : (
+                <SlideImage banner={banner} onLoad={measure} />
+              )}
+            </div>
+          );
+        })}
+
+        {/* Carousel controls, above the slides so they stay clickable. */}
+        {hasMultiple && (
+          <>
+            <button
+              type="button"
+              onClick={prev}
+              className="absolute left-2 top-1/2 z-30 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/25 text-white backdrop-blur-sm transition-colors hover:bg-white/45 sm:left-4"
+              aria-label="Previous banner"
+            >
+              <ChevronLeft size={22} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={next}
+              className="absolute right-2 top-1/2 z-30 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/25 text-white backdrop-blur-sm transition-colors hover:bg-white/45 sm:right-4"
+              aria-label="Next banner"
+            >
+              <ChevronRight size={22} aria-hidden="true" />
+            </button>
+
+            <div className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 gap-2 sm:bottom-4">
+              {banners.map((banner, index) => (
+                <button
+                  key={banner.id}
+                  type="button"
+                  onClick={() => goTo(index)}
+                  className={`h-2.5 rounded-full transition-all ${
+                    index === currentIndex ? 'w-6 bg-white' : 'w-2.5 bg-white/60 hover:bg-white/85'
+                  }`}
+                  aria-label={`Go to banner ${index + 1}`}
+                  aria-current={index === currentIndex}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Navigation Arrows */}
-      {banners.length > 1 && (
-        <>
-          <button
-            onClick={prevBanner}
-            className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-white/20 hover:bg-white/40 text-white rounded-full transition-all backdrop-blur-sm"
-            aria-label="Previous banner"
-          >
-            <ChevronLeft size={24} />
-          </button>
-          <button
-            onClick={nextBanner}
-            className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-2 bg-white/20 hover:bg-white/40 text-white rounded-full transition-all backdrop-blur-sm"
-            aria-label="Next banner"
-          >
-            <ChevronRight size={24} />
-          </button>
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
-            {banners.map((_, index) => (
-              <button
-                key={index}
-                onClick={() => setCurrentIndex(index)}
-                className={`w-2.5 h-2.5 rounded-full transition-all ${
-                  index === currentIndex ? 'bg-primary-500 scale-110' : 'bg-white/60 hover:bg-white/80'
-                }`}
-                aria-label={`Go to banner ${index + 1}`}
-              />
-            ))}
-          </div>
-        </>
-      )}
     </section>
   );
+}
+
+/**
+ * One banner image.
+ *
+ * `w-full` inside a box that already matches the image's own ratio is what
+ * keeps an oversized flyer from pushing past the slide — the box constrains it,
+ * not the viewport.
+ */
+function SlideImage({
+  banner,
+  onLoad,
+}: {
+  banner: Banner;
+  onLoad: (e: SyntheticEvent<HTMLImageElement>) => void;
+}) {
+  return (
+    <img
+      src={banner.imageUrl}
+      alt=""
+      className="h-full w-full object-cover"
+      onLoad={onLoad}
+      loading={banner.order === 1 ? 'eager' : 'lazy'}
+      decoding="async"
+      referrerPolicy="no-referrer"
+    />
+  );
+}
+
+/** Turns '/product/<uuid>' into something a screen reader can read aloud. */
+function describeTarget(target: string): string {
+  if (target.startsWith('/product/')) return 'Go to this product';
+  if (target.startsWith('/category/')) return 'Go to this category';
+  return 'Go to this banner destination';
 }
