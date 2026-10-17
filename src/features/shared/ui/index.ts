@@ -1,7 +1,7 @@
 export { Button } from './Button';
 export { Input, Textarea } from './Input';
 export { Modal } from './Modal';
-export { Table, StatCard } from './Table';
+export { Table } from './Table';
 export type { Column } from './Table';
 export { Card, CardHeader, ProductCard } from './Card';
 export { ImageUpload } from './ImageUpload';

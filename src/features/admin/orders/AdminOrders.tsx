@@ -58,9 +58,10 @@ export default function AdminOrders() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <OrdersPageHeader />
+    <div className="flex flex-col gap-6 pb-10">
+      {/* No page heading here. The layout header bar already names the route
+          ("Orders"); this page used to print "Manage Orders" directly beneath
+          it, so the same title appeared twice, eight pixels apart. */}
 
       {/* Statistics Grid */}
       <OrderStatsGrid stats={stats} />
@@ -82,17 +83,6 @@ export default function AdminOrders() {
         onStatusUpdate={handleStatusUpdate}
       />
     </div>
-  );
-}
-
-/**
- * Orders page header
- */
-function OrdersPageHeader() {
-  return (
-    <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
-      Manage Orders
-    </h2>
   );
 }
 

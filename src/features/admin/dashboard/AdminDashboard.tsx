@@ -23,7 +23,8 @@
  * @module AdminDashboard
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
+import { clsx } from 'clsx'
 import {
   Package,
   ShoppingCart,
@@ -49,8 +50,7 @@ import {
 } from 'recharts'
 import { useDashboard } from './hooks'
 import type { DashboardStats } from './hooks'
-import { StatCard, StatRow } from '../../shared/ui/Table'
-import { ChartCard, ChartEmpty, sharedTooltipProps } from '../../shared/ui/ChartCard'
+import { ChartEmpty, sharedTooltipProps, tint } from '../../shared/ui/ChartCard'
 import {
   chartGrid,
   chartHeight,
@@ -58,6 +58,8 @@ import {
   formatAxisKsh,
   formatCompactKsh,
   space,
+  tone,
+  type ToneName,
 } from '../../../theme/adminTheme'
 
 /** Beyond this a ranked bar list stops being scannable; the rest fold away. */
@@ -80,6 +82,47 @@ function truncateCategoryName(name: string): string {
  */
 function rankedCategoryHeight(count: number): number {
   return Math.max(chartHeight, Math.min(count, MAX_RANKED_CATEGORIES) * 25 + 12);
+}
+
+/**
+ * One headline figure.
+ *
+ * Local to this page. The shared `StatCard` this replaced assumed the same
+ * four-across shape for every admin screen, which is exactly the constraint
+ * that stopped the orders page showing seven figures without clipping its
+ * revenue. Layout is per page now; colour still comes from the shared `tone`
+ * map so nothing drifts.
+ */
+function Figure({
+  title,
+  value,
+  icon,
+  toneName = 'slate',
+  className,
+}: {
+  title: string
+  value: string | number
+  icon: ReactNode
+  toneName?: ToneName
+  className?: string
+}) {
+  const t = tone[toneName]
+
+  return (
+    <div className={clsx('flex min-w-0 items-start gap-3.5 px-5 py-4 sm:px-6 sm:py-5', className)}>
+      <div className={`grid h-10 w-10 flex-shrink-0 place-items-center rounded-lg ${t.bg} ${t.fg}`}>
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-medium text-slate-500">{title}</p>
+        {/* The figure leads. A small muted label above means the number is the
+            first thing read, and the label still fits on one line. */}
+        <p className="mt-0.5 truncate text-[26px] font-semibold leading-tight tracking-tight tabular-nums text-slate-900">
+          {value}
+        </p>
+      </div>
+    </div>
+  )
 }
 
 export default function AdminDashboard() {
@@ -130,31 +173,40 @@ export default function AdminDashboard() {
     <div className="flex flex-col pb-10" style={{ gap: space.loose }}>
       <DashboardHeader onRefresh={handleRefresh} refreshing={refreshing} />
 
-      {/* Headline figures. One surface, hairline separators — not four cards. */}
-      <StatRow>
-        <StatCard
+      {/* Headline figures. Bespoke to this page: four across, hairline
+          separators, value leading. See Figure below. */}
+      <div className="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4">
+        <Figure
+          className="sm:border-l sm:border-slate-100 sm:first:border-l-0"
           title="Products in catalogue"
           value={stats.products}
           icon={<Package size={18} />}
-          color="blue"
+          toneName="blue"
         />
-        <StatCard
+        <Figure
+          className="xl:border-l xl:border-slate-100"
           title="Orders"
           value={stats.orders}
           icon={<ShoppingCart size={18} />}
-          color="orange"
+          toneName="accent"
           // No hint here. The pending count also appears in the attention list
           // directly below, which links through to the orders — showing the same
           // number twice on one screen adds noise without making the work easier.
         />
-        <StatCard title="Registered users" value={stats.users} icon={<Users size={18} />} color="emerald" />
-        <StatCard
+        <Figure
+          className="sm:border-l xl:border-l sm:border-slate-100 xl:border-slate-100"
+          title="Registered users"
+          value={stats.users}
+          icon={<Users size={18} />}
+          toneName="emerald"
+        />
+        <Figure
           title="Total revenue"
           value={formatCompactKsh(stats.revenue)}
           icon={<DollarSign size={18} />}
-          color="purple"
+          toneName="purple"
         />
-      </StatRow>
+      </div>
 
       <AttentionList stats={stats} />
 
@@ -175,7 +227,11 @@ export default function AdminDashboard() {
         on the right where the unit difference is explicit.
       */}
       <div className="grid grid-cols-1 gap-8 border-t border-slate-200 pt-8 lg:grid-cols-2">
-        <ChartCard title="Trading" subtitle="Revenue and orders, last 6 months">
+        <section className={tint} aria-label="Trading">
+          <header className="pb-2">
+            <h3 className="text-[15px] font-semibold text-slate-900">Trading</h3>
+            <p className="mt-0.5 text-xs text-slate-500">Revenue and orders, last 6 months</p>
+          </header>
           {monthlyData.length > 0 ? (
             <ResponsiveContainer width="100%" height={chartHeight}>
               <ComposedChart data={monthlyData} margin={{ top: 4, right: 4, bottom: 0, left: -6 }}>
@@ -240,9 +296,13 @@ export default function AdminDashboard() {
               hint="Revenue and order counts appear here once orders start coming in."
             />
           )}
-        </ChartCard>
+        </section>
 
-        <ChartCard title="Products by category" subtitle="Top of the catalogue">
+        <section className={tint} aria-label="Products by category">
+          <header className="pb-2">
+            <h3 className="text-[15px] font-semibold text-slate-900">Products by category</h3>
+            <p className="mt-0.5 text-xs text-slate-500">Top of the catalogue</p>
+          </header>
           {categoryData.length > 0 ? (
             <ResponsiveContainer width="100%" height={rankedCategoryHeight(categoryData.length)}>
               {/* Horizontal bars, not a donut.
@@ -308,7 +368,7 @@ export default function AdminDashboard() {
               hint="Assign a category to a product and it will appear here."
             />
           )}
-        </ChartCard>
+        </section>
       </div>
     </div>
   )

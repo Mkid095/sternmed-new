@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { Category } from '../../../types';
 import { api } from '../../../services/api';
-import { ImageUpload, ConfirmationModal, useConfirmationModal, useToastSuccess, useToastError } from '../../shared/ui';
+import { ImageUpload, ConfirmationModal, Modal, useConfirmationModal, useToastSuccess, useToastError } from '../../shared/ui';
 
 /**
  * Admin Categories Page Component
@@ -185,14 +185,13 @@ export default function AdminCategories() {
   // ============ Main Layout ============
 
   return (
-    <div className="space-y-4 pb-20 lg:pb-0">
-      {/* Header */}
+    <div className="flex flex-col gap-4 pb-10">
+      {/* No page title here — the layout header bar already reads "Categories",
+          so the page repeated the same word in a second, larger heading just
+          below it. The count line is the part that adds information. */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Categories</h1>
-            <p className="text-sm text-slate-500 mt-1">{categories.length} categories total</p>
-          </div>
+          <p className="text-sm text-slate-500">{categories.length} categories total</p>
           <button
             onClick={openAddForm}
             className="hidden sm:flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium transition-colors shadow-sm"
@@ -451,75 +450,83 @@ interface CategoryFormModalProps {
   isEditing: boolean;
 }
 
+/**
+ * Add/edit category dialog.
+ *
+ * Was a fourth hand-rolled modal: no focus trap, no Escape handling, no
+ * role="dialog", and its footer had a `pb-20` hack to clear the mobile bottom
+ * nav. Now the shared Radix-backed Modal, with the actions in its footer so
+ * they stay reachable when the body scrolls.
+ *
+ * The submit button lives in the footer, outside the <form>, so it is wired to
+ * the form by id via the `form` attribute rather than by nesting — otherwise
+ * the buttons could not be pinned outside the scroll area.
+ */
 function CategoryFormModal({ formData, onChange, onSubmit, onClose, isEditing }: CategoryFormModalProps) {
+  const formId = 'category-form';
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-md max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-200">
-          <h2 className="text-lg font-bold text-slate-900">
-            {isEditing ? 'Edit Category' : 'Add New Category'}
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
-            <X size={20} />
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={isEditing ? 'Edit Category' : 'Add New Category'}
+      size="md"
+      footer={
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form={formId}
+            className="flex-1 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-700"
+          >
+            {isEditing ? 'Update Category' : 'Add Category'}
           </button>
         </div>
+      }
+    >
+      <form id={formId} onSubmit={onSubmit} className="flex flex-col gap-4">
+        <div>
+          <label htmlFor="category-name" className="mb-1 block text-sm font-medium text-slate-700">
+            Category name <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="category-name"
+            type="text"
+            required
+            value={formData.name}
+            onChange={(e) => onChange({ ...formData, name: e.target.value })}
+            placeholder="e.g., IV Cannulas"
+            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
 
-        {/* Form */}
-        <form onSubmit={onSubmit} className="flex-1 overflow-y-auto p-4 space-y-4 pb-24 sm:pb-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Category Name *</label>
-            <input
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => onChange({ ...formData, name: e.target.value })}
-              placeholder="e.g., IV Cannulas"
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-          </div>
+        <ImageUpload
+          label="Category Image (Optional)"
+          value={formData.image}
+          onChange={(url) => onChange({ ...formData, image: url })}
+          recommendedSize="Recommended: 400x300px"
+        />
 
-          <div>
-            <ImageUpload
-              label="Category Image (Optional)"
-              value={formData.image}
-              onChange={(url) => onChange({ ...formData, image: url })}
-              recommendedSize="Recommended: 400x300px"
-            />
-          </div>
-
-          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-            <input
-              type="checkbox"
-              id="showOnHome"
-              checked={formData.showOnHome}
-              onChange={(e) => onChange({ ...formData, showOnHome: e.target.checked })}
-              className="w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-            />
-            <label htmlFor="showOnHome" className="text-sm font-medium text-slate-700 cursor-pointer flex items-center gap-2">
-              <Home size={16} className="text-slate-400" />
-              Show on home page
-            </label>
-          </div>
-
-          {/* Footer */}
-          <div className="flex gap-3 p-4 border-t border-slate-200 bg-white sm:bg-slate-50 pb-20 sm:pb-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-xl transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-xl transition-colors"
-            >
-              {isEditing ? 'Update Category' : 'Add Category'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
+          <input
+            type="checkbox"
+            id="showOnHome"
+            checked={formData.showOnHome}
+            onChange={(e) => onChange({ ...formData, showOnHome: e.target.checked })}
+            className="h-5 w-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+          />
+          <label htmlFor="showOnHome" className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
+            <Home size={16} className="text-slate-400" />
+            Show on home page
+          </label>
+        </div>
+      </form>
+    </Modal>
   );
 }

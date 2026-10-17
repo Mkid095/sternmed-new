@@ -1,60 +1,34 @@
 /**
- * Chart primitives shared by every admin surface.
+ * Chart utilities.
  *
- * The dashboard carried its own copy of this chrome — `ChartCard`,
- * `EmptyChart` and four byte-identical tooltip `contentStyle` objects pasted
- * into four chart blocks. Any change to the tooltip meant four edits, and the
- * copies had already begun to drift.
+ * This file used to export a `ChartCard` panel that wrapped every plot on every
+ * admin page. It was removed for the same reason as `StatCard`: one shared
+ * panel shape could not suit both a full-width dashboard trend and a compact
+ * side panel, so pages either stretched it or worked around it. Each page now
+ * composes its own chrome from the `tint` value below.
  *
- * These live in shared/ui because every admin page that plots something
- * (orders, revenue, products) needs the same panel and the same empty state;
- * a page-specific version guarantees they slowly stop matching.
- *
- * Deliberately NOT a card: no border, no shadow. A screen of bordered panels
- * reads as a stack of unrelated objects.
- *
- * It does need a surface, though. Removing it entirely — leaving charts to
- * float on the white canvas with only faint grey gridlines and whitespace
- * between them — made the dashboard worse, not better: with nothing defining
- * where one chart ends and the next begins, the gridlines read as scattered
- * noise and the eye could not settle on either plot. A very light tint gives
- * each chart a defined area to sit in without reintroducing the boxed-card look.
+ * What remains is value-level — the tooltip appearance and an empty state —
+ * which every page needs identically and which has no opinion about layout.
  */
 
 import type { ReactNode } from 'react'
 import { chartHeight, chartTooltipStyle } from '../../../theme/adminTheme'
 
-interface ChartCardProps {
-  title: string
-  subtitle?: string
-  /** Controls or a legend placed on the right of the header. */
-  actions?: ReactNode
-  children: ReactNode
-}
-
-export function ChartCard({ title, subtitle, actions, children }: ChartCardProps) {
-  return (
-    <section
-      className="flex flex-col rounded-xl bg-slate-50 p-5"
-      aria-label={title}
-    >
-      <header className="flex items-start justify-between gap-3 pb-2">
-        <div className="min-w-0">
-          <h3 className="truncate text-[15px] font-semibold text-slate-900">{title}</h3>
-          {subtitle && <p className="mt-0.5 truncate text-xs text-slate-500">{subtitle}</p>}
-        </div>
-        {actions && <div className="flex-shrink-0">{actions}</div>}
-      </header>
-
-      {children}
-    </section>
-  )
-}
+/**
+ * The surface a plot sits on.
+ *
+ * A light tint, deliberately not a bordered or shadowed card. On the white
+ * admin canvas a chart with no surface at all is worse than a card: nothing
+ * marks where one plot ends and the next begins, the pale gridlines read as
+ * scattered marks, and two charts side by side look hectic. A tint defines the
+ * area without the boxed-card look.
+ */
+export const tint = 'rounded-xl bg-slate-50 p-5'
 
 /**
  * Empty state for a chart.
  *
- * Kept at the standard chart height so the layout does not collapse and then
+ * Held at the standard chart height so the layout does not collapse and then
  * re-expand as data arrives — that jump is jarring on a dashboard that
  * refreshes.
  */
@@ -84,11 +58,12 @@ export function ChartEmpty({ message, hint }: { message: string; hint?: string }
 /**
  * Shared Recharts tooltip props.
  *
- * Spreading this onto `<Tooltip>` is what removes the four duplicate
- * `contentStyle` blocks. `formatter` stays at the call site because each chart
- * labels its own series differently.
+ * The tooltip used to be a `contentStyle` object pasted into four separate
+ * charts, which had already begun to drift. Spreading this keeps one appearance
+ * everywhere. `formatter` stays at the call site because each chart labels its
+ * own series differently.
  */
 export const sharedTooltipProps = {
   contentStyle: chartTooltipStyle,
-  cursor: { fill: 'var(--color-slate-50)' },
+  cursor: { fill: 'var(--color-slate-100)' },
 } as const

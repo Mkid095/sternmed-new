@@ -114,6 +114,47 @@ export const space = {
 } as const
 
 /**
+ * Foreground/background pairs for figure tiles and status icons.
+ *
+ * These are VALUES, not a layout. Each admin page arranges its own figures
+ * however suits its data — the orders page needs seven across, the dashboard
+ * four — but they all pick colour from this map so a "pending" tile is the same
+ * amber everywhere without the pages sharing a single component that forces
+ * them into one shape.
+ */
+export const tone = {
+  slate: { fg: 'text-slate-600', bg: 'bg-slate-100' },
+  blue: { fg: 'text-primary-600', bg: 'bg-primary-50' },
+  primary: { fg: 'text-primary-600', bg: 'bg-primary-50' },
+  green: { fg: 'text-emerald-600', bg: 'bg-emerald-50' },
+  emerald: { fg: 'text-emerald-600', bg: 'bg-emerald-50' },
+  amber: { fg: 'text-amber-600', bg: 'bg-amber-50' },
+  yellow: { fg: 'text-amber-600', bg: 'bg-amber-50' },
+  red: { fg: 'text-red-600', bg: 'bg-red-50' },
+  purple: { fg: 'text-purple-600', bg: 'bg-purple-50' },
+  accent: { fg: 'text-accent-600', bg: 'bg-accent-50' },
+  orange: { fg: 'text-accent-600', bg: 'bg-accent-50' },
+} as const
+
+export type ToneName = keyof typeof tone
+
+/**
+ * Status pill colours, shared so an order that is "pending" looks identical on
+ * the list, the detail panel and the dashboard.
+ */
+export const statusTone: Record<string, { fg: string; bg: string; ring: string }> = {
+  pending: { fg: 'text-amber-700', bg: 'bg-amber-50', ring: 'ring-amber-200' },
+  processing: { fg: 'text-blue-700', bg: 'bg-blue-50', ring: 'ring-blue-200' },
+  shipped: { fg: 'text-purple-700', bg: 'bg-purple-50', ring: 'ring-purple-200' },
+  delivered: { fg: 'text-emerald-700', bg: 'bg-emerald-50', ring: 'ring-emerald-200' },
+  cancelled: { fg: 'text-red-700', bg: 'bg-red-50', ring: 'ring-red-200' },
+  paid: { fg: 'text-emerald-700', bg: 'bg-emerald-50', ring: 'ring-emerald-200' },
+  unpaid: { fg: 'text-amber-700', bg: 'bg-amber-50', ring: 'ring-amber-200' },
+  failed: { fg: 'text-red-700', bg: 'bg-red-50', ring: 'ring-red-200' },
+  refunded: { fg: 'text-slate-700', bg: 'bg-slate-100', ring: 'ring-slate-200' },
+}
+
+/**
  * Money formatting for charts and tiles.
  *
  * The dashboard formatted revenue in four places with slightly different rules
