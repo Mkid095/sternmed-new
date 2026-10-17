@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Plus, Mail, ExternalLink, Trash2, Copy, Check } from 'lucide-react'
 import { supabase } from '../../../config/supabase'
 import { ConfirmationModal, useConfirmationModal, useToastSuccess, useToastError } from '../../shared/ui'
+import { MAIL_APP_URL } from '../../../constants'
 
 interface EmailAlias {
   id: string
@@ -148,7 +149,7 @@ export function AdminMails() {
               <p><strong>Email:</strong> ${aliasEmail}</p>
               <p><strong>Password:</strong> <code style="background: #fff; padding: 2px 6px; border: 1px solid #ddd; border-radius: 4px;">${temporaryPassword}</code></p>
             </div>
-            <p>You can log in to your email at: <a href="https://mail.sternmedafrika.com" style="color: #2563eb;">https://mail.sternmedafrika.com</a></p>
+            <p>You can log in to your email at: <a href={MAIL_APP_URL} style={{ color: '#2563eb' }}>{MAIL_APP_URL}</a></p>
             <p>For security reasons, we recommend changing your password after the first login.</p>
             <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
             <p style="color: #666; font-size: 12px;">If you did not request this alias, please contact the administrator immediately.</p>
@@ -209,7 +210,7 @@ export function AdminMails() {
   const copyCredentials = () => {
     if (!createdCredentials) return
 
-    const text = `Email: ${createdCredentials.email}\nPassword: ${createdCredentials.password}\n\nLogin at: https://mail.sternmedafrika.com\n\nThis account was created for: ${createdCredentials.name} (${createdCredentials.recipientEmail})`
+    const text = `Email: ${createdCredentials.email}\nPassword: ${createdCredentials.password}\n\nLogin at: ${MAIL_APP_URL}\n\nThis account was created for: ${createdCredentials.name} (${createdCredentials.recipientEmail})`
     navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -257,7 +258,7 @@ export function AdminMails() {
 
   const openMailbox = (alias: EmailAlias) => {
     // Open mail.sternmedafrika.com in new tab
-    window.open('https://mail.sternmedafrika.com', '_blank')
+    window.open(MAIL_APP_URL, '_blank')
   }
 
   return (
@@ -277,7 +278,7 @@ export function AdminMails() {
           Create Email Alias
         </button>
         <a
-          href="https://mail.sternmedafrika.com"
+          href={MAIL_APP_URL}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -376,7 +377,7 @@ export function AdminMails() {
                   <p className="text-sm text-gray-500">Email User</p>
                 </div>
                 <button
-                  onClick={() => window.open('https://mail.sternmedafrika.com', '_blank')}
+                  onClick={() => window.open(MAIL_APP_URL, '_blank')}
                   className="text-blue-600 hover:text-blue-700 text-sm font-medium"
                 >
                   Access Mailbox →
@@ -513,7 +514,7 @@ export function AdminMails() {
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
                 <p className="text-sm text-amber-800">
                   <strong>Important:</strong> The user should change their password after first login at{' '}
-                  <a href="https://mail.sternmedafrika.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
+                  <a href={MAIL_APP_URL} target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">
                     mail.sternmedafrika.com
                   </a>
                 </p>

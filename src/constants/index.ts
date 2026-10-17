@@ -8,6 +8,15 @@
  */
 
 /**
+ * The standalone mail application.
+ *
+ * Mail is not part of this admin — it is a separate app on its own host, so
+ * every link out to it needs this rather than an inline literal. It was pasted
+ * into six places in AdminMails alone.
+ */
+export const MAIL_APP_URL = 'https://mail.sternmedafrika.com';
+
+/**
  * Order status constants
  */
 export const ORDER_STATUS = {
@@ -221,10 +230,10 @@ export const ADMIN_NAV_ITEMS = [
   { path: '/admin/orders', label: 'Orders', icon: 'ShoppingCart' },
   { path: '/admin/landing-config', label: 'Landing Config', icon: 'LayoutTemplate' },
   { path: '/admin/banners', label: 'Banners', icon: 'ImageIcon' },
-  { path: '/admin/emails', label: 'Email Platform', icon: 'Mail' },
-  { path: '/admin/email-aliases', label: 'Email Aliases', icon: 'Mail', adminOnly: true },
-  { path: '/admin/email-unassigned', label: 'Unassigned Emails', icon: 'AlertCircle', adminOnly: true },
-  { path: '/admin/email-templates', label: 'Email Templates', icon: 'FileText', adminOnly: true },
+  // The admin "Email Platform" page was removed - mail is handled in the
+  // separate mail app. So were email-aliases / email-unassigned /
+  // email-templates: all three were listed here but no route ever existed for
+  // them, so they rendered as nav items that 404'd.
   { path: '/admin/users', label: 'Users & Roles', icon: 'Users', adminOnly: true },
   { path: '/admin/settings', label: 'Settings', icon: 'Settings' },
 ] as const;

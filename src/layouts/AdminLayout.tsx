@@ -1,8 +1,8 @@
 import { Outlet } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import { AdminSidebar } from './components/AdminSidebar';
+import { useCallback, useEffect, useState } from 'react';
+import { AdminSidebar, loadCollapsed, saveCollapsed } from './components/AdminSidebar';
 import { AdminHeader } from './components/AdminHeader';
 import { AdminUserMenu } from './components/AdminUserMenu';
 import { AdminBottomNav } from './components/AdminBottomNav';
@@ -11,6 +11,16 @@ export default function AdminLayout() {
   const { user, logout, initialize, initialized, isLoading } = useAuthStore();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Desktop rail state, separate from the mobile drawer. Persisted so the
+  // choice survives a reload.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(loadCollapsed);
+
+  const toggleCollapsed = useCallback(() => {
+    setSidebarCollapsed((c) => {
+      saveCollapsed(!c);
+      return !c;
+    });
+  }, []);
 
   useEffect(() => {
     const unsubscribe = initialize();
@@ -65,12 +75,14 @@ export default function AdminLayout() {
         user={user}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={toggleCollapsed}
       >
-        <AdminUserMenu user={user} onLogout={handleLogout} />
+        <AdminUserMenu user={user} onLogout={handleLogout} collapsed={sidebarCollapsed} />
       </AdminSidebar>
 
       <main className="flex-1 flex flex-col overflow-hidden min-w-0 pb-16 lg:pb-0">
-        <AdminHeader onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
+        <AdminHeader onMenuClick={toggleCollapsed} />
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pt-2 pb-4 sm:pb-6 lg:pb-8">
           <Outlet />
         </div>

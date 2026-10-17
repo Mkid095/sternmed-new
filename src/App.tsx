@@ -25,7 +25,6 @@ import { AdminCategories } from './features/admin/categories';
 import { AdminLandingConfig } from './features/admin/landing';
 import { AdminBanners } from './features/admin/banners';
 import { AdminMails } from './features/admin/mails';
-import { AdminEmails } from './features/admin/emails';
 import { AdminUsers } from './features/admin/users';
 import { AdminSettings } from './features/admin/settings';
 import AdminOrders from './features/admin/orders';
@@ -113,7 +112,6 @@ export default function App() {
                   <AdminMails />
                 </RoleGuard>
               } />
-              <Route path="emails" element={<AdminEmails />} />
               <Route path="users" element={
                 <RoleGuard allowedRoles={['admin']}>
                   <AdminUsers />

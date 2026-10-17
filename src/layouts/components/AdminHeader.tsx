@@ -1,7 +1,8 @@
-import { Menu, User, LogOut, Settings, ChevronDown } from 'lucide-react';
+import { Menu, User, LogOut, Settings, ChevronDown, Mail, ExternalLink } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
+import { MAIL_APP_URL } from '../../constants';
 
 /**
  * Page title per route.
@@ -19,7 +20,6 @@ const TITLES: Record<string, string> = {
   '/admin/landing-config': 'Landing Config',
   '/admin/banners': 'Banners',
   '/admin/mails': 'Mails',
-  '/admin/emails': 'Email Platform',
   '/admin/users': 'Users & Roles',
   '/admin/settings': 'Settings',
 };
@@ -127,6 +127,21 @@ export function AdminHeader({ title, onMenuClick }: AdminHeaderProps) {
               <Settings size={18} className="text-slate-400" />
               <span>Settings</span>
             </button>
+
+            {/*
+              Mail lives in its own app, not in this admin. Opens in a new tab
+              so an administrator reading store settings does not lose them.
+            */}
+            <a
+              href={MAIL_APP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <Mail size={18} className="text-slate-400" />
+              <span>Email platform</span>
+              <ExternalLink size={14} className="ml-auto text-slate-300" aria-hidden="true" />
+            </a>
 
             <div className="border-t border-slate-100 mt-1 pt-1">
               <button
