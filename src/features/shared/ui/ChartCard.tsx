@@ -10,10 +10,15 @@
  * (orders, revenue, products) needs the same panel and the same empty state;
  * a page-specific version guarantees they slowly stop matching.
  *
- * Deliberately NOT a card. No border, no shadow, no rounded box. A screen of
- * bordered panels reads as a stack of unrelated objects and flattens the
- * hierarchy — every element shouts at the same volume. Structure comes from
- * whitespace and a single hairline under the heading instead.
+ * Deliberately NOT a card: no border, no shadow. A screen of bordered panels
+ * reads as a stack of unrelated objects.
+ *
+ * It does need a surface, though. Removing it entirely — leaving charts to
+ * float on the white canvas with only faint grey gridlines and whitespace
+ * between them — made the dashboard worse, not better: with nothing defining
+ * where one chart ends and the next begins, the gridlines read as scattered
+ * noise and the eye could not settle on either plot. A very light tint gives
+ * each chart a defined area to sit in without reintroducing the boxed-card look.
  */
 
 import type { ReactNode } from 'react'
@@ -29,8 +34,11 @@ interface ChartCardProps {
 
 export function ChartCard({ title, subtitle, actions, children }: ChartCardProps) {
   return (
-    <section className="flex flex-col" aria-label={title}>
-      <header className="flex items-start justify-between gap-3 pb-3">
+    <section
+      className="flex flex-col rounded-xl bg-slate-50 p-5"
+      aria-label={title}
+    >
+      <header className="flex items-start justify-between gap-3 pb-2">
         <div className="min-w-0">
           <h3 className="truncate text-[15px] font-semibold text-slate-900">{title}</h3>
           {subtitle && <p className="mt-0.5 truncate text-xs text-slate-500">{subtitle}</p>}

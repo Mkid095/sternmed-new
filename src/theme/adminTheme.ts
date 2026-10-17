@@ -37,10 +37,17 @@ export const chartSeries = [
   'var(--color-accent-700)',
 ] as const
 
-/** Chart furniture: grid lines, axes, tick labels. */
+/**
+ * Chart furniture: grid lines, axes, tick labels.
+ *
+ * The grid is slate-300, not the slate-200 it was on a white background. The
+ * charts now sit on a slate-50 panel, and a slate-200 rule against that tint is
+ * almost invisible — the plot area loses its structure and the lines just read
+ * as scattered marks.
+ */
 export const chartGrid = {
-  grid: 'var(--color-slate-200)',
-  axis: 'var(--color-slate-300)',
+  grid: 'var(--color-slate-300)',
+  axis: 'var(--color-slate-400)',
   tick: 'var(--color-slate-500)',
 } as const
 
