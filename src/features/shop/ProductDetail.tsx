@@ -7,20 +7,22 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, ShoppingBag, Package, Truck, Shield, MessageCircle } from 'lucide-react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ChevronRight, ShoppingBag, Package, Truck, Shield, MessageCircle } from 'lucide-react';
 import { api } from '../../services/api';
 import { resolveWhatsAppNumber } from '../../services/supabase/settings.service';
 import { Product, SiteSettings } from '../../types';
 import { generateWhatsAppLink } from '../../constants';
 import { useCartStore } from '../../store/cartStore';
 import { useToastSuccess, useToastError } from '../shared/ui';
+import { ProductCard } from '../shared/ui';
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [categoryName, setCategoryName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -34,8 +36,12 @@ export default function ProductDetail() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [productsData] = await Promise.all([
+        // Categories come along because the breadcrumb needs the product's
+        // category name; without it the only way back up the catalogue is
+        // "Back to Shop", which drops the shopper at the top of 42 products.
+        const [productsData, categories] = await Promise.all([
           api.getProducts(),
+          api.getCategories().catch(() => []),
         ]);
         // Filter out draft, archived, and out-of-stock products
         const visibleProducts = productsData.filter((p) => p.status !== 'draft' && p.status !== 'archived' && p.status !== 'out_of_stock');
@@ -44,6 +50,11 @@ export default function ProductDetail() {
         const foundProduct = visibleProducts.find((p) => p.id === id);
         if (foundProduct) {
           setProduct(foundProduct);
+          if (foundProduct.categoryId) {
+            setCategoryName(
+              categories.find((c) => c.id === foundProduct.categoryId)?.name ?? null,
+            );
+          }
         } else {
           navigate('/shop', { replace: true });
         }
@@ -55,6 +66,13 @@ export default function ProductDetail() {
     };
     fetchData();
   }, [id, navigate]);
+
+  // Navigating between products reuses this component, so the image and
+  // quantity must not carry over from the product just viewed.
+  useEffect(() => {
+    setSelectedImageIndex(0);
+    setQuantity(1);
+  }, [id]);
 
   // Fetch site settings for WhatsApp contact
   useEffect(() => {
@@ -126,24 +144,60 @@ export default function ProductDetail() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-4">
-      {/* Back Button */}
-      <button
-        onClick={() => navigate('/shop')}
-        className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-6"
-      >
-        <ChevronLeft size={16} />
-        Back to Shop
-      </button>
+      {/*
+        Breadcrumb rather than a lone "Back to Shop". It answers "where am I?"
+        and gets the shopper to the sibling products, which is what they want
+        next, instead of dumping them at the top of the full catalogue.
+      */}
+      <nav aria-label="Breadcrumb" className="mb-6">
+        <ol className="flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
+          <li>
+            <Link to="/" className="transition-colors hover:text-slate-900">
+              Home
+            </Link>
+          </li>
+          <li aria-hidden="true" className="text-slate-300">
+            /
+          </li>
+          <li>
+            {categoryName ? (
+              <Link
+                to={`/shop?category=${product.categoryId}`}
+                className="transition-colors hover:text-slate-900"
+              >
+                {categoryName}
+              </Link>
+            ) : (
+              <Link to="/shop" className="transition-colors hover:text-slate-900">
+                Shop
+              </Link>
+            )}
+          </li>
+          <li aria-hidden="true" className="text-slate-300">
+            /
+          </li>
+          <li>
+            <span
+              aria-current="page"
+              className="line-clamp-1 font-medium text-slate-900"
+            >
+              {product.name}
+            </span>
+          </li>
+        </ol>
+      </nav>
 
       {/* Product Details */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
         {/* Images */}
         <div>
-          <div className="aspect-square bg-slate-100 rounded-lg overflow-hidden mb-3">
+          {/* `contain` on white, matching the product cards. `cover` in a square frame
+              crops the pack itself — the one thing a buyer is here to look at. */}
+          <div className="aspect-square overflow-hidden rounded-lg border border-slate-200 bg-white mb-3">
             <img
               src={productImages[selectedImageIndex] || product.imageUrl}
               alt={product.name}
-              className="w-full h-full object-cover"
+              className="h-full w-full object-contain p-3"
               referrerPolicy="no-referrer"
             />
           </div>
@@ -177,34 +231,31 @@ export default function ProductDetail() {
         <div className="flex flex-col">
           <h1 className="text-2xl font-semibold text-slate-900 mb-2">{product.name}</h1>
 
-          {product.status === 'coming_soon' ? (
-            <button
-              onClick={handleEnquire}
-              className="mb-4 py-3 px-6 bg-primary-600 text-white rounded font-medium hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
-            >
-              <MessageCircle size={20} />
-              Enquire
-            </button>
-          ) : (
+          {/*
+            A coming-soon product has no price to show — the Enquire button for
+            that case lives at the bottom of this column, next to where Add to
+            Cart sits for an available product. It used to be duplicated here
+            as well, so the same action appeared twice on one page.
+          */}
+          {product.status !== 'coming_soon' && (
             <p className="text-2xl font-bold text-slate-900 mb-4">
               Ksh {product.price.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </p>
           )}
 
-          {/* Status Badge */}
+          {/* Status. A count is useful to an institutional buyer, so it stays — but it
+              is grouped with thousands separators rather than as raw digits. */}
           <div className="mb-4">
             {product.status === 'coming_soon' ? (
-              <p className="text-sm text-blue-600 font-semibold">
-                Coming Soon
+              <p className="text-sm font-medium text-slate-500">
+                Not yet available — enquire and we will tell you when it arrives.
               </p>
             ) : product.stock > 0 ? (
-              <p className="text-sm text-green-600">
-                {product.stock} in stock
+              <p className="text-sm text-emerald-600">
+                In stock — {product.stock.toLocaleString('en-KE')} available
               </p>
             ) : (
-              <p className="text-sm text-red-600">
-                Out of stock
-              </p>
+              <p className="text-sm text-red-600">Out of stock</p>
             )}
           </div>
 
@@ -233,19 +284,32 @@ export default function ProductDetail() {
           {/* Quantity and Add to Cart */}
           {product.status === 'active' && product.stock > 0 && (
             <div className="flex items-center gap-3 mt-auto">
-              <div className="flex items-center border border-slate-300 rounded">
+              <div className="flex items-center rounded-lg border border-slate-300">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="px-3 py-2 text-slate-600 hover:bg-slate-50 transition-colors"
+                  disabled={quantity <= 1}
+                  aria-label="Decrease quantity"
+                  className="px-3 py-2 text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
                 >
-                  -
+                  <span aria-hidden="true">−</span>
                 </button>
-                <span className="px-4 py-2 text-sm font-medium">{quantity}</span>
+                {/*
+                  `aria-live` so a screen reader hears the new total when the
+                  stepper is used, rather than having to go looking for it.
+                */}
+                <span
+                  aria-live="polite"
+                  className="min-w-[3ch] px-3 py-2 text-center text-sm font-medium tabular-nums"
+                >
+                  {quantity}
+                </span>
                 <button
                   onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                  className="px-3 py-2 text-slate-600 hover:bg-slate-50 transition-colors"
+                  disabled={quantity >= product.stock}
+                  aria-label="Increase quantity"
+                  className="px-3 py-2 text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
                 >
-                  +
+                  <span aria-hidden="true">+</span>
                 </button>
               </div>
 
@@ -260,51 +324,48 @@ export default function ProductDetail() {
             </div>
           )}
 
+          {/*
+            Not `mt-auto` here. An available product's Add to Cart is pushed to
+            the bottom to line up with a full-height image column; a coming-soon
+            product has nothing below this point, so `mt-auto` dropped the only
+            action on the page off the bottom of the screen.
+          */}
           {product.status === 'coming_soon' && (
-            <div className="mt-auto">
+            <div className="mt-2">
               <button
                 onClick={handleEnquire}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-primary-600 text-white rounded font-medium hover:bg-primary-700 transition-colors"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 py-3 font-medium text-white transition-colors hover:bg-primary-700"
               >
-                <MessageCircle size={18} />
-                Enquire
+                <MessageCircle size={18} aria-hidden="true" />
+                Enquire on WhatsApp
               </button>
+              <p className="mt-2 text-xs text-slate-500">
+                Opens WhatsApp with this product already named.
+              </p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Related Products */}
+      {/* Related products use the shared card, so they are real links like every
+          other product tile and cannot diverge from it again. */}
       {relatedProducts.length > 0 && (
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Related Products</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <section>
+          <h2 className="mb-4 text-lg font-semibold text-slate-900">
+            More from {categoryName ?? 'this category'}
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
             {relatedProducts.map((relatedProduct) => (
-              <div
+              <ProductCard
                 key={relatedProduct.id}
-                onClick={() => navigate(`/product/${relatedProduct.id}`)}
-                className="cursor-pointer"
-              >
-                <div className="bg-white border border-slate-200 rounded overflow-hidden hover:shadow-md transition-all">
-                  <div className="aspect-square bg-slate-100">
-                    <img
-                      src={relatedProduct.imageUrl}
-                      alt={relatedProduct.name}
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
-                  <div className="p-3">
-                    <h3 className="text-sm font-medium text-slate-900 line-clamp-1">{relatedProduct.name}</h3>
-                    <p className="text-sm font-semibold text-slate-900 mt-1">
-                      Ksh {relatedProduct.price.toLocaleString('en-KE', { minimumFractionDigits: 0 })}
-                    </p>
-                  </div>
-                </div>
-              </div>
+                product={relatedProduct}
+                onAddToCart={() => addItem(relatedProduct)}
+                to={`/product/${relatedProduct.id}`}
+                showStock={false}
+              />
             ))}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

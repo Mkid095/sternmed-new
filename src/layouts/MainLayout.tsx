@@ -54,15 +54,31 @@ export default function MainLayout() {
             </div>
 
             {/* Desktop Nav */}
+            {/*
+              "Products", not "Shop". The home page shows only what has been
+              featured, so "Shop" read as a subset of the page you were already
+              on — the label did not tell a first-time visitor that this is
+              where the rest of the catalogue lives.
+            */}
             <nav className="hidden md:flex space-x-8">
               <Link to="/" className="text-slate-600 hover:text-primary-600 px-3 py-2 text-sm font-medium transition-colors">Home</Link>
-              <Link to="/shop" className="text-slate-600 hover:text-primary-600 px-3 py-2 text-sm font-medium transition-colors">Shop</Link>
+              <Link to="/shop" className="text-slate-600 hover:text-primary-600 px-3 py-2 text-sm font-medium transition-colors">Products</Link>
             </nav>
 
             {/* Cart Icon */}
             <div className="flex items-center">
-              <Link to="/cart" className="relative p-2 text-slate-600 hover:text-primary-600 transition-colors">
-                <ShoppingCart size={20} />
+              <Link
+                to="/cart"
+                // The badge count is visual only; without this a screen reader
+                // hears "cart" and never learns the cart is not empty.
+                aria-label={
+                  totalItems > 0
+                    ? `Cart, ${totalItems} ${totalItems === 1 ? 'item' : 'items'}`
+                    : 'Cart, empty'
+                }
+                className="relative p-2 text-slate-600 hover:text-primary-600 transition-colors"
+              >
+                <ShoppingCart size={20} aria-hidden="true" />
                 {totalItems > 0 && (
                   <span className="absolute top-1 right-1 inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold leading-none text-white bg-accent-500 rounded-full">
                     {totalItems}
@@ -96,7 +112,7 @@ export default function MainLayout() {
           <div>
             <h4 className="text-primary-600 font-semibold mb-4">Quick Links</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link to="/shop" className="hover:text-primary-600 transition-colors">Shop</Link></li>
+              <li><Link to="/shop" className="hover:text-primary-600 transition-colors">Products</Link></li>
             </ul>
           </div>
           <div>

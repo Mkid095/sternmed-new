@@ -1,5 +1,4 @@
 import { Product } from '../../../types';
-import { useNavigate } from 'react-router-dom';
 import { ProductCard } from '../../shared/ui';
 
 interface ProductGridProps {
@@ -9,7 +8,6 @@ interface ProductGridProps {
 }
 
 export function ProductGrid({ products, onAddToCart, emptyMessage = 'No products found' }: ProductGridProps) {
-  const navigate = useNavigate();
   if (products.length === 0) {
     return (
       <div className="text-center py-16 bg-white rounded-lg border border-slate-200">
@@ -34,11 +32,8 @@ export function ProductGrid({ products, onAddToCart, emptyMessage = 'No products
         <ProductCard
           key={product.id}
           product={product}
-          onAddToCart={(e) => {
-            e.stopPropagation();
-            onAddToCart(product);
-          }}
-          onClick={() => navigate(`/product/${product.id}`)}
+          onAddToCart={() => onAddToCart(product)}
+          to={`/product/${product.id}`}
           showStock={false}
         />
       ))}

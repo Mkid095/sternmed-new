@@ -15,7 +15,7 @@
  */
 
 import { Fragment, useEffect, useState, useMemo, type CSSProperties, type Key } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../../services/api';
 import {
   Product,
@@ -30,7 +30,7 @@ import { useCartStore } from '../../store/cartStore';
 import { HeroCarousel } from './components/HeroCarousel';
 import { CategorySection } from './components/CategorySection';
 import { ProductCard } from '../shared/ui/Card';
-import { Package } from 'lucide-react';
+import { Package, ArrowRight } from 'lucide-react';
 
 // Default settings if none exist
 const DEFAULT_SETTINGS: Partial<SiteSettings> = {
@@ -176,6 +176,46 @@ export default function Home() {
     ).slice(0, count);
   }, [products, settings.featuredProductCount]);
 
+  /**
+   * Everything the shop can show, under the same visibility rules the shop
+   * itself uses. This is what makes the catalogue call to action honest — it
+   * counts what a visitor would actually find, not the total row count.
+   */
+  const totalVisibleProducts = useMemo(
+    () =>
+      products.filter(
+        (p) =>
+          p.status !== 'draft' &&
+          p.status !== 'archived' &&
+          p.status !== 'out_of_stock',
+      ).length,
+    [products],
+  );
+
+  /**
+   * How many categories a visitor would actually find in the shop.
+   *
+   * Counting `visibleCategories` here said "2" — those are the categories
+   * flagged for the home page, not the ones in the catalogue, so the promise
+   * the button makes was wrong. This counts distinct categories among the
+   * products the shop will show.
+   */
+  const shopCategoryCount = useMemo(
+    () =>
+      new Set(
+        products
+          .filter(
+            (p) =>
+              p.status !== 'draft' &&
+              p.status !== 'archived' &&
+              p.status !== 'out_of_stock',
+          )
+          .map((p) => p.categoryId)
+          .filter(Boolean),
+      ).size,
+    [products],
+  );
+
   // Get visible categories sorted by prominentCategories order from settings
   const visibleCategories = useMemo(() => {
     const visible = categories.filter((c) => c.showOnHome);
@@ -256,11 +296,8 @@ export default function Home() {
                 <ProductCard
                   key={product.id}
                   product={product}
-                  onAddToCart={(e) => {
-                    e.stopPropagation();
-                    addItem(product);
-                  }}
-                  onClick={() => navigate(`/product/${product.id}`)}
+                  onAddToCart={() => addItem(product)}
+                  to={`/product/${product.id}`}
                   showStock={false}
                 />
               ))}
@@ -345,6 +382,37 @@ export default function Home() {
       {/* Content Sections - with proper padding */}
       <div className="bg-gradient-to-b from-slate-50 to-white py-4 sm:py-6 lg:py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/*
+            The home page shows only what has been deliberately featured, which
+            leaves a visitor with no sign that the rest of the catalogue exists.
+            The header link said "Shop", which reads like the shop page is a
+            subset of this one. This says plainly what is there and how many
+            items it holds.
+          */}
+          {totalVisibleProducts > featuredProducts.length && (
+            <section className="mb-10 sm:mb-12">
+              <div className="flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white px-6 py-8 text-center sm:flex-row sm:justify-between sm:text-left">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    Browse the full catalogue
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {totalVisibleProducts.toLocaleString('en-KE')} products across{' '}
+                    {shopCategoryCount} {shopCategoryCount === 1 ? 'category' : 'categories'} —
+                    this page shows only what has been featured.
+                  </p>
+                </div>
+                <Link
+                  to="/shop"
+                  className="inline-flex flex-shrink-0 items-center gap-2 rounded-xl bg-primary-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-primary-700"
+                >
+                  See all products
+                  <ArrowRight size={16} aria-hidden="true" />
+                </Link>
+              </div>
+            </section>
+          )}
+
           {contentSections.map(section => renderSection(section))}
           {orphanedPins.map(section => (
             <CtaBanner key={`orphan-${section.id}`} section={section} />

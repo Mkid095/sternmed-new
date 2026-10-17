@@ -327,6 +327,34 @@ a.size-9 {
   min-width: 0;
 }
 
+/*
+ * The rule above has to set `position: relative` so the invisible hit area has
+ * a containing block to position against. But it applies to any button that
+ * merely NAMES a size — including ones that are already `absolute` or `fixed`
+ * for their own layout. For those, `relative` silently wins at equal
+ * specificity and the control lands wherever it would have been in normal flow:
+ * a carousel's scroll arrow rendered in the top-left corner of the document,
+ * several thousand pixels from the strip it was supposed to scroll.
+ *
+ * Both utilities already establish a containing block, so nothing is lost by
+ * restoring them. Declared after the block above, these tie on specificity and
+ * win on order.
+ */
+button.absolute,
+button.fixed,
+button.sticky,
+a.absolute,
+a.fixed,
+a.sticky {
+  position: revert;
+}
+button.fixed { position: fixed; }
+button.sticky { position: sticky; }
+button.absolute { position: absolute; }
+a.absolute { position: absolute; }
+a.fixed { position: fixed; }
+a.sticky { position: sticky; }
+
 /* ...and the hit-area expansion. A pseudo-element rather than padding, so the
  * extra reach is invisible and never reflows the row. */
 button.h-6::after,

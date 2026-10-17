@@ -112,23 +112,30 @@ export function CategorySection({ category, products, onAddToCart }: CategorySec
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Scroll Buttons */}
+        {/*
+          Scroll buttons stay visible rather than appearing on hover.
+
+          Hover-revealed arrows are unreachable on a touch screen, where
+          `group-hover` never fires — so on a phone the row simply looked cut
+          off mid-card with nothing to indicate it moved. They only render when
+          that direction has somewhere to go, so a row that fits shows neither.
+        */}
         {canScrollLeft && (
           <button
             onClick={() => scroll('left')}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-8 h-8 bg-white hover:bg-slate-50 text-slate-700 rounded shadow border border-slate-200 transition-all flex items-center justify-center -ml-2 sm:opacity-0 sm:group-hover/carousel:opacity-100"
-            aria-label="Scroll left"
+            className="absolute left-0 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 -ml-4"
+            aria-label={`Scroll ${category.name} products left`}
           >
-            <ChevronLeft size={16} strokeWidth={2.5} />
+            <ChevronLeft size={18} strokeWidth={2.5} aria-hidden="true" />
           </button>
         )}
         {canScrollRight && (
           <button
             onClick={() => scroll('right')}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-20 w-8 h-8 bg-white hover:bg-slate-50 text-slate-700 rounded shadow border border-slate-200 transition-all flex items-center justify-center -mr-2 sm:opacity-0 sm:group-hover/carousel:opacity-100"
-            aria-label="Scroll right"
+            className="absolute right-0 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 -mr-4"
+            aria-label={`Scroll ${category.name} products right`}
           >
-            <ChevronRight size={16} strokeWidth={2.5} />
+            <ChevronRight size={18} strokeWidth={2.5} aria-hidden="true" />
           </button>
         )}
 
@@ -148,11 +155,8 @@ export function CategorySection({ category, products, onAddToCart }: CategorySec
             >
               <ProductCard
                 product={product}
-                onAddToCart={(e) => {
-                  e.stopPropagation();
-                  onAddToCart(product);
-                }}
-                onClick={() => navigate(`/product/${product.id}`)}
+                onAddToCart={() => onAddToCart(product)}
+                to={`/product/${product.id}`}
                 showStock={false}
               />
             </div>

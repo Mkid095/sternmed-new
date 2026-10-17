@@ -30,7 +30,7 @@ export function MobileBottomNav({ whatsappPhone = '' }: MobileBottomNavProps) {
 
   const navItems: NavItem[] = [
     { to: '/', icon: Home, label: 'Home' },
-    { to: '/shop', icon: ShoppingCart, label: 'Shop' },
+    { to: '/shop', icon: ShoppingCart, label: 'Products' },
     { to: '/cart', icon: ShoppingCart, label: 'Cart', showCartBadge: true },
   ];
 

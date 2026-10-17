@@ -1,5 +1,6 @@
 import React, { ReactNode, useEffect, useState } from 'react';
-import { ShoppingBag, MessageCircle, ImageOff } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ShoppingBag, MessageCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ProductStatus, SiteSettings } from '../../../types';
 import { api } from '../../../services/api';
@@ -89,23 +90,38 @@ interface ProductCardProps {
   onAddToCart?: (e: React.MouseEvent) => void;
   showStock?: boolean;
   showWishlistButton?: boolean;
-  onClick?: () => void;
+  /**
+   * Where the card navigates. Every listing links to the product page, so this
+   * is only optional for a card that genuinely is not a link.
+   */
+  to?: string;
 }
 
+/**
+ * Product tile used by the home page and the shop grid.
+ *
+ * Why the link is an overlay
+ * --------------------------
+ * This used to be a `<div onClick={navigate}>`: not focusable, not announced as
+ * a link, no href for the browser to hover-status or middle-click, and
+ * invisible to anything indexing the page. Every listing on the site — featured
+ * row, category strips, shop grid — rendered products as unlabelled divs.
+ *
+ * A `<button>` inside an `<a>` is invalid HTML and breaks both controls, so the
+ * obvious fix — wrapping the card in a `Link` — is not available. Instead the
+ * card is a positioned container, the `Link` is a transparent overlay covering
+ * it, and the action button sits above the overlay at a higher `z-index`. One
+ * real link per card, keyboard focusable, openable in a new tab, and the button
+ * still wins the click.
+ */
 export function ProductCard({
   product,
   onAddToCart,
   showStock = true,
-  showWishlistButton = false,
-  onClick,
+  to,
 }: ProductCardProps) {
-  const handleCardClick = () => {
-    if (onClick) {
-      onClick();
-    }
-  };
-
   const handleAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     if (onAddToCart) {
       onAddToCart(e);
@@ -129,72 +145,79 @@ export function ProductCard({
     setImageFailed(false);
   }, [product.imageUrl]);
 
-  return (
-    <div
-      onClick={handleCardClick}
-      className="bg-white border border-slate-200 rounded overflow-hidden hover:shadow-md hover:border-slate-300 transition-all flex flex-col group cursor-pointer"
-    >
-      {/* Image Container */}
-      <div className="aspect-square bg-slate-100 relative overflow-hidden">
+  const body = (
+    <>
+      {/* Image container */}
+      <div className="relative aspect-square overflow-hidden bg-slate-50">
         {product.imageUrl && !imageFailed ? (
           <img
             src={product.imageUrl}
             alt=""
             onError={() => setImageFailed(true)}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            /*
+              `contain`, not `cover`. Catalogue shots of medical consumables are
+              tall portrait images on white; `cover` in a square tile crops the
+              top and bottom off the product itself, which is the one part of the
+              image a buyer needs to see. `contain` shows the whole item.
+            */
+            className="h-full w-full object-contain p-3 transition-transform duration-300 group-hover:scale-[1.03]"
             loading="lazy"
             referrerPolicy="no-referrer"
           />
         ) : (
+          /*
+            Placeholder carries the product initial so a grid of unphotographed
+            items still reads as a deliberate catalogue rather than a page that
+            failed to load its images.
+          */
           <span
             aria-hidden="true"
-            className="absolute inset-0 grid place-items-center bg-slate-100"
+            className="absolute inset-0 grid place-items-center bg-slate-50"
           >
-            <ImageOff size={26} className="text-slate-300" />
+            <span className="grid h-12 w-12 place-items-center rounded-full bg-white text-sm font-semibold text-slate-300 ring-1 ring-slate-200">
+              {product.name.trim().charAt(0).toUpperCase() || '•'}
+            </span>
           </span>
         )}
-        {/* Featured Badge - smaller, subtler */}
+
+        {/* Badges sit on a translucent plate so they stay legible over a
+            white-background product shot instead of fighting it. */}
         {product.isFeatured && (
-          <div className="absolute top-2 left-2 bg-amber-500 text-white px-2 py-0.5 rounded text-xs font-semibold shadow-sm">
+          <span className="absolute left-2 top-2 rounded-md bg-white/95 px-2 py-0.5 text-[11px] font-semibold text-amber-700 shadow-sm ring-1 ring-amber-200">
             Featured
-          </div>
+          </span>
         )}
-        {/* Coming Soon Badge */}
         {product.status === 'coming_soon' && (
-          <div className="absolute top-2 right-2 bg-blue-500 text-white px-2 py-0.5 rounded text-xs font-semibold shadow-sm">
-            Coming Soon
-          </div>
+          <span className="absolute right-2 top-2 rounded-md bg-white/95 px-2 py-0.5 text-[11px] font-semibold text-slate-600 shadow-sm ring-1 ring-slate-200">
+            Coming soon
+          </span>
         )}
       </div>
 
-      {/* Content - more compact */}
-      <div className="p-3 flex flex-col gap-1.5">
-        {/* Product Name */}
-        <h3 className="text-sm font-semibold text-slate-900 line-clamp-1">
+      {/* Body. `flex-1` plus `mt-auto` on the footer row is what keeps the price
+          or Enquire button on the baseline of every card in a row, whatever the
+          product name length. */}
+      <div className="flex flex-1 flex-col gap-1 p-3">
+        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900">
           {product.name}
         </h3>
 
-        {/* Short Description - 1 line only */}
-        <p className="text-xs text-slate-500 line-clamp-1">
+        <p className="line-clamp-2 text-xs leading-relaxed text-slate-500">
           {product.description}
         </p>
 
-        {/* Stock Count - small and subtle */}
         {showStock && product.stock > 0 && (
-          <p className="text-xs text-slate-400">
-            {product.stock} in stock
-          </p>
+          <p className="text-xs text-slate-400">{product.stock} in stock</p>
         )}
         {showStock && product.stock === 0 && (
-          <p className="text-xs text-red-500">
-            Out of stock
-          </p>
+          <p className="text-xs text-red-500">Out of stock</p>
         )}
 
-        {/* Price or Enquire Button */}
+        {/* Footer — pinned to the bottom of the card. */}
         {product.status === 'coming_soon' ? (
           <button
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
               /*
                 `resolveWhatsAppNumber`, not `settings.phoneNumber`. The raw
@@ -212,21 +235,22 @@ export function ProductCard({
               const message = `Hi, I'd like to enquire about: ${product.name}`;
               window.open(generateWhatsAppLink(phone, message), '_blank', 'noopener');
             }}
-            className="w-full py-2 flex items-center justify-center gap-2 bg-primary-600 text-white rounded font-medium hover:bg-primary-700 transition-colors"
+            // Above the link overlay, or the overlay eats the click.
+            className="relative z-20 mt-auto flex w-full items-center justify-center gap-2 rounded-lg border border-primary-200 bg-primary-50 py-2 text-sm font-medium text-primary-700 transition-colors hover:border-primary-300 hover:bg-primary-100"
           >
-            <MessageCircle size={16} />
+            <MessageCircle size={15} aria-hidden="true" />
             Enquire
           </button>
         ) : (
-          <div className="flex items-center justify-between pt-1 mt-auto gap-2">
+          <div className="mt-auto flex items-center justify-between gap-2 pt-2">
             <span className="text-sm font-bold text-slate-900">
               Ksh {product.price.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </span>
             {onAddToCart && product.stock > 0 && product.status === 'active' && (
               <button
                 onClick={handleAddToCart}
-                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-medium transition-colors"
-                aria-label="Add to cart"
+                aria-label={`Add ${product.name} to cart`}
+                className="relative z-20 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-800"
               >
                 Add
               </button>
@@ -234,6 +258,33 @@ export function ProductCard({
           </div>
         )}
       </div>
+    </>
+  );
+
+  const shell =
+    'group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white ' +
+    'transition-all hover:border-slate-300 hover:shadow-md focus-within:border-primary-400 ' +
+    'focus-within:ring-2 focus-within:ring-primary-500/25';
+
+  if (!to) {
+    return <div className={shell}>{body}</div>;
+  }
+
+  return (
+    <div className={shell}>
+      {body}
+      {/*
+        The overlay. It comes after the body so it paints above the card
+        content, and any button inside the body carries `z-20` to sit above it
+        again. It carries the accessible name, because the visible text it
+        covers is not the only thing a screen reader should announce.
+      */}
+      <Link
+        to={to}
+        className="absolute inset-0 z-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+      >
+        <span className="sr-only">{product.name}</span>
+      </Link>
     </div>
   );
 }

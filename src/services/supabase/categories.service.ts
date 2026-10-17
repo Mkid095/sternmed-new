@@ -12,8 +12,21 @@ const transformCategoryRow = (row: CategoryRow): Category => ({
 });
 
 export const categoriesService = {
+  /**
+   * Categories in the order the dashboard sets.
+   *
+   * This was `select('*')` with no `orderBy`, so the shop sidebar and the
+   * footer listed categories in whatever order Postgres happened to return —
+   * the `order` column an admin drags to reorder was written and then ignored.
+   * Name is the tiebreaker so categories sharing an `order` (the default 0)
+   * still come back in a stable, predictable sequence.
+   */
   async getCategories(): Promise<Category[]> {
-    const { data, error } = await supabase.from('categories').select('*');
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .order('order', { ascending: true, nullsFirst: false })
+      .order('name', { ascending: true });
     if (error) throw new Error(error.message);
     return (data as CategoryRow[]).map(transformCategoryRow);
   },
