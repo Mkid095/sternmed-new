@@ -1,14 +1,45 @@
+# ============================================================================
+# inbound-email-worker
+#
+# Bound to Cloudflare Email Routing for the mail domain. The worker name here
+# is what the Email Routing rule points at, so it must NOT be renamed without
+# also updating the routing rule (Cloudflare dashboard -> Email -> Routing).
+#
+# Deploy:  npx wrangler deploy
+# Secrets: npx wrangler secret put <NAME>   (never commit these to this file)
+# ============================================================================
+
 name = "inbound-email-worker"
-main = "index.ts"
-compatibility_date = "2024-01-01"
+main = "src/index.ts"
 account_id = "8e66d3ac1829ab41a49d449659080d14"
-workers_dev = true
+compatibility_date = "2024-12-05"
+workers_dev = false
 
-# Environment variables are set via secrets (not in wrangler.toml for security)
-# Run: npx wrangler secret list
+# Non-secret configuration only. Anything credential-shaped belongs in
+# `wrangler secret put`, not here — this file is committed.
+#
+# NOTE: ALLOWED_DOMAINS, MAX_ATTACHMENT_SIZE and MAX_EMAIL_SIZE are deliberately
+# NOT declared here. They already exist on the worker as secrets, and Cloudflare
+# rejects a deploy that binds the same name as both a var and a secret. Move
+# them into [vars] only after checking `wrangler secret list` and deleting the
+# secret — do not guess the current ALLOWED_DOMAINS value.
+[vars]
+MAX_ATTACHMENTS_PER_EMAIL = "20"
+CLOUDINARY_FOLDER = "inbound-email"
+LOG_SPOOF_FAILURES = "true"
 
-[env.production]
-name = "inbound-email-worker-prod"
+# Unsigned upload preset. Neither value is a credential — the browser already
+# ships both in src/config/cloudinary.ts — so they are safe to keep here. The
+# Cloudinary API SECRET must never be added to this worker; a Worker cannot
+# sign a request anyway (SubtleCrypto has no SHA-1).
+CLOUDINARY_CLOUD_NAME = "dwnqoijmg"
+CLOUDINARY_UPLOAD_PRESET = "sternmed_uploads"
 
-[env.staging]
-name = "inbound-email-worker-staging"
+# Worker tail / error reporting. Keep on: a mail worker that silently drops a
+# message is indistinguishable from a mail worker that works.
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true

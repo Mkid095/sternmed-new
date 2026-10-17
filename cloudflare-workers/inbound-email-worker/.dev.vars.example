@@ -1,0 +1,8 @@
+# Local development secrets. Copy to `.dev.vars` (gitignored) and fill in.
+# `.dev.vars` must NEVER be committed.
+
+SUPABASE_URL="https://ckndtgbhzcfepxafrmrw.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY="paste-service-role-key"
+
+CLOUDINARY_CLOUD_NAME="dwnqoijmg"
+CLOUDINARY_UPLOAD_PRESET="sternmed_uploads"
