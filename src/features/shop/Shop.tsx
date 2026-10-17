@@ -52,6 +52,13 @@ export default function Shop() {
 
   const categoryFilter = searchParams.get('category');
   const searchQuery = searchParams.get('q') || '';
+  /*
+   * The home page's "View All" under Featured Products links to
+   * `?featured=true`. The shop never read that parameter, so the link quietly
+   * showed the unfiltered catalogue — the same page you were already on, with
+   * no indication anything had been filtered.
+   */
+  const featuredOnly = searchParams.get('featured') === 'true';
 
   // Keep search input in sync with URL params
   useEffect(() => {
@@ -96,11 +103,12 @@ export default function Shop() {
 
     const matched = products.filter((p) => {
       const matchesCategory = categoryFilter ? p.categoryId === categoryFilter : true;
+      const matchesFeatured = featuredOnly ? p.isFeatured : true;
       const matchesSearch =
         !needle ||
         p.name.toLowerCase().includes(needle) ||
         (p.description ?? '').toLowerCase().includes(needle);
-      return matchesCategory && matchesSearch;
+      return matchesCategory && matchesFeatured && matchesSearch;
     });
 
     // Sorted on a copy so the fetched order in state is never mutated.
@@ -122,7 +130,7 @@ export default function Shop() {
           );
       }
     });
-  }, [products, categoryFilter, searchQuery, sort]);
+  }, [products, categoryFilter, searchQuery, featuredOnly, sort]);
 
   /*
    * A new filter or sort must show the results from the top again. Without
@@ -130,7 +138,7 @@ export default function Shop() {
    */
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [categoryFilter, searchQuery, sort]);
+  }, [categoryFilter, searchQuery, featuredOnly, sort]);
 
   const visibleProducts = filteredProducts.slice(0, visibleCount);
   const hasMore = visibleProducts.length < filteredProducts.length;
@@ -158,16 +166,21 @@ export default function Shop() {
     setSearchParams(params);
   };
 
+  const hasActiveFilters = Boolean(categoryFilter || searchQuery || featuredOnly);
+  // The heading names whichever filter is narrowing the list, so the page never
+  // says "All products" while showing something else.
+  const categoryName = categoryFilter
+    ? categories.find((c) => c.id === categoryFilter)?.name || 'Products'
+    : featuredOnly
+      ? 'Featured products'
+      : 'All products';
+
+  /** Drops only the filters this bar owns; search and featured live elsewhere. */
   const clearFilters = () => {
     setSearchInput('');
     setSearchParams(new URLSearchParams());
     setMobileFilterOpen(false);
   };
-
-  const hasActiveFilters = Boolean(categoryFilter || searchQuery);
-  const categoryName = categoryFilter
-    ? categories.find((c) => c.id === categoryFilter)?.name || 'Products'
-    : 'All products';
 
   const filterPanel = (
     <ShopFilters
