@@ -7,6 +7,8 @@
  * @module OrderSummary
  */
 
+import { formatKsh } from '../CheckoutForm';
+
 /**
  * Props for OrderSummary component
  */
@@ -32,7 +34,7 @@ export function OrderSummary({ totalPrice }: OrderSummaryProps) {
       {/* Subtotal */}
       <div className="flex justify-between text-sm text-slate-600">
         <span>Subtotal</span>
-        <span>Ksh {totalPrice.toFixed(2)}</span>
+        <span>Ksh {formatKsh(totalPrice)}</span>
       </div>
 
       {/* Shipping Note */}
@@ -45,7 +47,7 @@ export function OrderSummary({ totalPrice }: OrderSummaryProps) {
       <div className="flex justify-between items-center pt-2 border-t border-slate-200">
         <span className="font-bold text-slate-900">Total</span>
         <span className="text-xl font-bold text-slate-900">
-          Ksh {totalPrice.toFixed(2)}
+          Ksh {formatKsh(totalPrice)}
         </span>
       </div>
     </div>

@@ -4,6 +4,11 @@
  * WhatsApp checkout button with loading state and helper text.
  * Opens WhatsApp with pre-filled order message.
  *
+ * Desktop only. On a phone the checkout column ends below a stack of form
+ * fields, so the sticky pay bar owns the button there and this one is hidden —
+ * two identical submit buttons on one screen is a choice the shopper should
+ * not have to make.
+ *
  * @module CheckoutButton
  */
 
@@ -45,7 +50,7 @@ export function CheckoutButton({
   className = '',
 }: CheckoutButtonProps) {
   return (
-    <div className="space-y-2">
+    <div className="hidden space-y-2 lg:block">
       {/* Submit Button */}
       <Button
         type="submit"
@@ -53,7 +58,7 @@ export function CheckoutButton({
         className={`w-full py-2.5 sm:py-3 ${className}`}
         disabled={isSubmitting}
       >
-        <MessageCircle size={18} />
+        <MessageCircle size={18} aria-hidden="true" />
         {isSubmitting ? 'Processing...' : text}
       </Button>
 

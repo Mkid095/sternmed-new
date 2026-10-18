@@ -2,6 +2,7 @@ import { Outlet, Link } from 'react-router-dom';
 import { ShoppingCart, Phone, Mail, Menu, X } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import { resolveWhatsAppNumber } from '../services/supabase/settings.service';
 import { SiteSettings, Category } from '../types';
@@ -14,6 +15,8 @@ export default function MainLayout() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const { pathname } = useLocation();
+  const isCheckout = pathname === '/cart';
 
   useEffect(() => {
     Promise.all([
@@ -102,8 +105,15 @@ export default function MainLayout() {
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav whatsappPhone={whatsappPhone} />
 
-      {/* Floating Action Buttons (WhatsApp & AI Chatbot) */}
-      <FloatingButtons whatsappPhone={whatsappPhone} />
+      {/*
+        Floating Action Buttons (WhatsApp & AI Chatbot).
+
+        Not on the cart. Its bottom edge occupies exactly the band the sticky
+        pay bar sits in, so the WhatsApp button covered the total and the chatbot
+        covered the checkout button. Both are also redundant here — the page's
+        whole purpose is a WhatsApp hand-off, and there is a button for it.
+      */}
+      {!isCheckout && <FloatingButtons whatsappPhone={whatsappPhone} />}
     </div>
   );
 }

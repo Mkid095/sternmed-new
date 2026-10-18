@@ -85,27 +85,82 @@ export function CheckoutForm({
   // ============ Render ============
 
   return (
-    <div className="w-full lg:w-96 flex-shrink-0">
-      <div className="bg-white border border-slate-200 rounded-lg p-4 sm:p-6 sticky top-20 sm:top-24">
-        {/* Header */}
-        <h2 className="text-xl font-bold text-slate-900 mb-4 sm:mb-6">
-          Customer Details
-        </h2>
+    <>
+      <div className="w-full flex-shrink-0 lg:w-[26rem]">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 lg:sticky lg:top-24">
+          {/* Header */}
+          <h2 className="mb-4 text-lg font-semibold text-slate-900 sm:mb-6 sm:text-xl">
+            Delivery details
+          </h2>
 
-        {/* Form */}
-        <CheckoutFormInternal
-          formData={formData}
-          errors={errors}
-          touched={touched}
-          isSubmitting={isSubmitting}
-          onSubmit={handleSubmit}
-          onFormDataChange={setFormData}
-          onFieldBlur={validateField}
-          totalPrice={totalPrice}
-        />
+          {/* Form */}
+          <CheckoutFormInternal
+            formData={formData}
+            errors={errors}
+            touched={touched}
+            isSubmitting={isSubmitting}
+            onSubmit={handleSubmit}
+            onFormDataChange={setFormData}
+            onFieldBlur={validateField}
+            totalPrice={totalPrice}
+          />
+        </div>
       </div>
-    </div>
+
+      {/*
+        Sticky pay bar, mobile only.
+
+        Stacked under the items, the checkout column runs name → email → phone →
+        address → notes → summary → button, so on a phone the only control that
+        completes the purchase was below the fold and a long scroll. This pins
+        the total and the action to the bottom of the viewport for the whole
+        checkout, which is the pattern every mobile checkout converges on.
+
+        It is a second submit button, not a duplicate control: same form, same
+        handler, same validation. On `lg` the sidebar button is visible and this
+        bar is removed, so exactly one is ever on screen.
+
+        Sits above the 65px mobile bottom nav rather than under it.
+      */}
+      <div className="fixed inset-x-0 bottom-16 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
+        <form onSubmit={handleSubmit} className="flex items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-slate-500">Total</p>
+            <p className="truncate text-base font-bold text-slate-900">
+              Ksh {formatKsh(totalPrice)}
+            </p>
+          </div>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="ml-auto inline-flex min-w-[12rem] items-center justify-center gap-2 rounded-xl bg-[#25D366] px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmitting ? (
+              'Processing…'
+            ) : (
+              <>
+                Checkout on WhatsApp
+              </>
+            )}
+          </button>
+        </form>
+      </div>
+    </>
   );
+}
+
+/**
+ * Kenyan shillings, whole numbers.
+ *
+ * Every price elsewhere on the site formats this way. The cart rows used
+ * `.toFixed(2)`, so the same Ksh 800 product read "800.00" in the cart and
+ * "800" everywhere else — the cart looked like a different shop.
+ */
+export function formatKsh(value: number): string {
+  return value.toLocaleString('en-KE', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
 }
 
 /**
