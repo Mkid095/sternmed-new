@@ -342,7 +342,11 @@ export function ProductFormModal({
           </div>
         )}
 
-        {step.id === 'details' && (
+        {/* On the Review step `step` is undefined (stepIndex walks past the
+            last content step), so the step bodies are only reachable through
+            stepIndex < STEPS.length — guard on isReview to keep the types
+            honest and the render safe. */}
+        {!isReview && step.id === 'details' && (
           <div className="flex flex-col gap-4">
             <p className="text-sm text-slate-500">{step.blurb}</p>
 
@@ -424,7 +428,7 @@ export function ProductFormModal({
           </div>
         )}
 
-        {step.id === 'pricing' && (
+        {!isReview && step.id === 'pricing' && (
           <div className="flex flex-col gap-4">
             <p className="text-sm text-slate-500">{step.blurb}</p>
 
@@ -495,7 +499,7 @@ export function ProductFormModal({
           </div>
         )}
 
-        {step.id === 'media' && (
+        {!isReview && step.id === 'media' && (
           <div className="flex flex-col gap-5">
             <p className="text-sm text-slate-500">{step.blurb}</p>
 
