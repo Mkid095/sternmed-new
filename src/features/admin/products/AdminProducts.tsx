@@ -215,8 +215,6 @@ export default function AdminProducts() {
         status: newProduct.status,
       };
 
-      console.log('Creating product with data:', productData);
-
       if (editingProduct) {
         await api.updateProduct(editingProduct.id, productData);
         showSuccess('Product updated successfully');

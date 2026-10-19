@@ -10,7 +10,7 @@
  * @module useImageUpload
  */
 
-import React, { useState, ChangeEvent, DragEvent, useRef } from 'react';
+import React, { useState, ChangeEvent, DragEvent, useRef, useEffect } from 'react';
 import { storageService } from '../../../../../services/storage.service';
 
 /**
@@ -110,10 +110,31 @@ export function useImageUpload(
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [previewUrl, setPreviewUrl] = useState(initialValue);
 
   // Ref for the hidden file input
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Local preview uses an object URL so a large image never spends its main
+  // thread being base64-encoded (FileReader.readAsDataURL on a 4MB file
+  // blocks for hundreds of milliseconds — the wizard's INP offender).
+  const [localPreview, setLocalPreviewState] = useState<string | null>(null);
+  const localPreviewRef = useRef<string | null>(null);
+
+  useEffect(
+    () => () => {
+      if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current);
+    },
+    []
+  );
+
+  const setLocalPreview = (url: string | null) => {
+    if (localPreviewRef.current && localPreviewRef.current !== url) {
+      URL.revokeObjectURL(localPreviewRef.current);
+    }
+    localPreviewRef.current = url;
+    setLocalPreviewState(url);
+  };
+
+  const previewUrl = localPreview ?? value;
 
   /**
    * Handles the actual file upload process
@@ -135,12 +156,10 @@ export function useImageUpload(
         return;
       }
 
-      // Step 2: Create local preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreviewUrl(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+      // Step 2: Create local preview. Object URL, not FileReader:
+      // readAsDataURL base64-encodes the whole file on the main thread,
+      // which is what blocked the upload button's handler for ~500ms.
+      setLocalPreview(URL.createObjectURL(file));
 
       // Step 3: Simulate progress for better UX
       // (fetch doesn't support progress, so we fake it)
@@ -161,10 +180,11 @@ export function useImageUpload(
       clearInterval(progressInterval);
       setUploadProgress(100);
 
-      // Update state with uploaded URL
+      // Update state with uploaded URL; drop the local object URL so the
+      // preview shows the canonical remote image.
       const uploadedUrl = result.url;
       setValue(uploadedUrl);
-      setPreviewUrl(uploadedUrl);
+      setLocalPreview(null);
 
       // Notify parent component
       onUploadComplete?.(uploadedUrl);
@@ -175,7 +195,7 @@ export function useImageUpload(
       // Handle upload failure
       const errorMessage = err.message || 'Failed to upload image';
       setError(errorMessage);
-      setPreviewUrl(value); // Revert to original value
+      setLocalPreview(null); // Revert to the previous image
       onUploadError?.(errorMessage);
     } finally {
       setIsUploading(false);
@@ -225,7 +245,7 @@ export function useImageUpload(
    */
   function handleRemove() {
     setValue('');
-    setPreviewUrl('');
+    setLocalPreview(null);
     setError(null);
 
     // Reset the file input
