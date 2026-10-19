@@ -23,7 +23,7 @@
  */
 
 import { useState, type FormEvent, type Key } from 'react';
-import { AlertCircle, ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, Check, LoaderCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { Category, ProductStatus } from '../../../../types';
 import { ImageUpload, MultiImageUpload, Modal } from '../../../shared/ui';
@@ -85,7 +85,9 @@ interface ProductFormModalProps {
   categories: Category[];
   isEditing: boolean;
   onChange: (product: ProductFormModalProps['product']) => void;
-  onSubmit: (e: FormEvent) => void;
+  /** Runs the save. Resolving it means "saved" — the modal then holds the
+      Review screen open with a Done button so the save is not invisible. */
+  onSubmit: (e: FormEvent) => Promise<void>;
   onClose: () => void;
 }
 
@@ -137,6 +139,11 @@ export function ProductFormModal({
   // `stepIndex` walks past the last content step to reach the review screen.
   const [stepIndex, setStepIndex] = useState(0);
   const [errors, setErrors] = useState<Errors>({ details: [], pricing: [], media: [] });
+  // The save is async, and closing the modal on success would make it
+  // invisible — "did it actually save?". So the Review screen stays open
+  // with the result, and Done is how you leave.
+  const [submitting, setSubmitting] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const step = STEPS[stepIndex];
   const isReview = stepIndex >= STEPS.length;
@@ -162,7 +169,7 @@ export function ProductFormModal({
     goTo(stepIndex + 1);
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
     // Validate every step, not just the review screen, so arriving here does
@@ -181,7 +188,13 @@ export function ProductFormModal({
       return;
     }
 
-    onSubmit(e);
+    setSubmitting(true);
+    try {
+      await onSubmit(e);
+      setSaved(true);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const remaining = STEPS.reduce((n, s) => n + validateStep(product, s.id).length, 0);
@@ -194,7 +207,7 @@ export function ProductFormModal({
       size="full"
       footer={
         <div className="flex items-center gap-2">
-          {stepIndex > 0 && (
+          {stepIndex > 0 && !saved && (
             <button
               type="button"
               onClick={() => goTo(stepIndex - 1)}
@@ -205,13 +218,16 @@ export function ProductFormModal({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-3 py-2.5 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-200"
-          >
-            Cancel
-          </button>
+          {!saved && (
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="rounded-lg px-3 py-2.5 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-200 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          )}
 
           <div className="ml-auto flex items-center gap-3">
             {!isReview && (
@@ -220,12 +236,23 @@ export function ProductFormModal({
               </span>
             )}
 
-            {isReview ? (
+            {saved ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-700"
+              >
+                <Check size={15} aria-hidden="true" />
+                Done
+              </button>
+            ) : isReview ? (
               <button
                 type="submit"
                 form={formId}
-                className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-700"
+                disabled={submitting}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-60"
               >
+                {submitting && <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />}
                 {isEditing ? 'Save changes' : 'Create product'}
               </button>
             ) : (
@@ -530,7 +557,15 @@ export function ProductFormModal({
 
         {isReview && (
           <div className="flex flex-col gap-4">
-            {remaining > 0 && (
+            {saved ? (
+              <div className="flex items-center gap-2.5 rounded-lg border border-green-200 bg-green-50 px-3.5 py-3">
+                <Check size={16} className="flex-shrink-0 text-green-600" aria-hidden="true" />
+                <p className="text-sm font-medium text-green-800">
+                  {isEditing ? 'Product saved' : 'Product created'} — the list behind this dialog
+                  is up to date. Press Done to close.
+                </p>
+              </div>
+            ) : remaining > 0 ? (
               <div
                 role="alert"
                 className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-3"
@@ -542,7 +577,7 @@ export function ProductFormModal({
                   ))}
                 </ul>
               </div>
-            )}
+            ) : null}
 
             <dl className="divide-y divide-slate-100 rounded-lg border border-slate-200">
               <ReviewRow label="Name" value={product.name || '—'} onEdit={() => goTo(0)} />

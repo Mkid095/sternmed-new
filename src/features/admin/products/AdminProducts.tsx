@@ -225,7 +225,9 @@ export default function AdminProducts() {
         showSuccess('Product added successfully');
       }
 
-      closeForm();
+      // Do NOT closeForm() here: the wizard stays open on its Review screen
+      // with a Done button, so the save is visible and deliberate. Leaving is
+      // the user's action (Done, X, or Escape), not a side effect of success.
       await fetchData();
     } catch (error) {
       console.error('Failed to save product:', error);
